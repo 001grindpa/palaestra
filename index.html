@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Palaestra — Two-Sided Dated Contest Floor</title>
+  <meta name="description" content="Palaestra is a two-sided dated contest match book on GenLayer StudioNet. A creator posts YES or NO, a joiner matches the stake, and consensus settles via dual public sources.">
+  
+  <!-- Early theme application before first paint -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('palaestra.theme');
+        var theme = (saved === 'light' || saved === 'dark') ? saved : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <div id="palaestra-root">
+
+    <!-- ============================================================ -->
+    <!-- LANDING VIEW (Match Book Public Overview) -->
+    <!-- ============================================================ -->
+    <section id="landing-view" class="view-section is-active">
+      <!-- Landing Header: Logo, Name, and Theme Toggle ONLY -->
+      <header class="landing-header">
+        <div class="landing-brand">
+          <img src="static/palaestra-logo-w.png" alt="Palaestra Emblem" class="brand-logo" width="36" height="36">
+          <span class="brand-name font-serif">Palaestra</span>
+        </div>
+
+        <div class="landing-actions-top">
+          <!-- Circular theme toggle button with no text -->
+          <button type="button" class="theme-toggle-btn" id="theme-toggle-landing" aria-label="Toggle theme" title="Toggle theme">
+            <svg class="theme-icon sun-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="theme-icon moon-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="landing-container">
+        
+        <!-- Hero Section -->
+        <div class="landing-hero">
+          <div class="emblem-banner">
+            <img src="static/palaestra-logo-w.png" alt="Palaestra Logo" class="hero-emblem" width="80" height="80">
+            <span class="emblem-sub font-mono">StudioNet Contract</span>
+          </div>
+          
+          <h1 class="landing-headline font-serif">Two sides. One dated question. Both sources must agree.</h1>
+          <p class="landing-shortline">A creator posts YES or NO. A joiner matches the stake. After the event date, two public pages settle it. If they cannot, both stakes return the next day.</p>
+
+          <!-- Single Action on Landing: #enter-floor with text "Enter the floor" -->
+          <div class="landing-actions">
+            <button type="button" class="btn-matchbook btn-enter" id="enter-floor">
+              <span>Enter the floor</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"></path>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Contract details card -->
+          <div class="contract-card">
+            <div class="contract-card-header">
+              <span class="card-label">StudioNet Smart Contract</span>
+              <span class="network-badge font-mono">Chain ID 61999 (0xf22f)</span>
+            </div>
+            <div class="contract-address-box">
+              <span class="font-mono contract-addr" id="landing-contract-address">0x05Ea4308905A80354515B991a35f1BE09186eB1C</span>
+              <a href="https://explorer-studio.genlayer.com/address/0x05Ea4308905A80354515B991a35f1BE09186eB1C" target="_blank" rel="noopener noreferrer" class="link-explorer" title="View on StudioNet Explorer">
+                <span>Explorer</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Specimen Match Ticket (Two-Column Layout with Brass Rule) -->
+        <div class="ticket-showcase-section">
+          <div class="section-title-wrap">
+            <span class="section-brass-line"></span>
+            <h2 class="section-title font-serif">The Match Ticket</h2>
+            <span class="section-brass-line"></span>
+          </div>
+          
+          <div class="match-ticket-card">
+            <div class="ticket-header">
+              <div class="ticket-id font-mono">SPECIMEN MATCH TICKET</div>
+              <div class="ticket-status-wrap">
+                <span class="status-chip chip-open font-mono">OPEN</span>
+              </div>
+            </div>
+
+            <!-- Two-Column Layout: Left is Question, Right is Stake and Two Sides, Brass Rule between -->
+            <div class="ticket-body-grid">
+              <!-- Left: Question & Dates & Sources -->
+              <div class="ticket-left">
+                <div class="ticket-field-group">
+                  <span class="ticket-label">Question Statement</span>
+                  <p class="ticket-question">"Will Arsenal defeat Chelsea in the Premier League fixture on 2026-10-18?"</p>
+                </div>
+
+                <div class="ticket-dates-row">
+                  <div class="date-col">
+                    <span class="ticket-label">Event Date</span>
+                    <span class="date-value font-mono">2026-10-18</span>
+                  </div>
+                  <div class="date-col">
+                    <span class="ticket-label">Resolve After</span>
+                    <span class="date-value font-mono">2026-10-19</span>
+                  </div>
+                  <div class="date-col">
+                    <span class="ticket-label">Refund After</span>
+                    <span class="date-value font-mono">2026-10-20</span>
+                  </div>
+                </div>
+
+                <div class="ticket-sources">
+                  <span class="ticket-label">Source Pair (Independent Allowlisted Hosts)</span>
+                  <div class="source-item">
+                    <span class="source-host font-mono">bbc.com</span>
+                    <span class="source-url font-mono">https://www.bbc.com/sport/football</span>
+                  </div>
+                  <div class="source-item">
+                    <span class="source-host font-mono">reuters.com</span>
+                    <span class="source-url font-mono">https://www.reuters.com/sports/soccer</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Brass Rule Divider -->
+              <div class="ticket-brass-divider"></div>
+
+              <!-- Right: Stake and the Two Sides -->
+              <div class="ticket-right">
+                <div class="stake-box">
+                  <span class="ticket-label">Contest Stake</span>
+                  <div class="stake-amount font-mono">1.000 GEN</div>
+                  <span class="stake-sub font-mono">Matched Pot: 2.000 GEN</span>
+                </div>
+
+                <div class="sides-box">
+                  <span class="ticket-label">Position Allocation</span>
+                  <div class="side-pill side-creator">
+                    <div class="side-role">Creator Position</div>
+                    <div class="side-pick side-yes font-mono">YES</div>
+                  </div>
+                  <div class="side-pill side-joiner">
+                    <div class="side-role">Joiner Position</div>
+                    <div class="side-pick side-no font-mono">NO</div>
+                  </div>
+                </div>
+
+                <div class="ticket-rule-callout">
+                  <span class="rule-icon">&#9878;</span>
+                  <span class="rule-text">Both sources must unanimously confirm the verdict. If they disagree or remain unknown, both stakes return on the refund date.</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="ticket-perforation">
+              <span class="perf-dot"></span><span class="perf-dot"></span><span class="perf-dot"></span>
+              <span class="perf-dot"></span><span class="perf-dot"></span><span class="perf-dot"></span>
+              <span class="perf-dot"></span><span class="perf-dot"></span><span class="perf-dot"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Three Columns of Match Book Rules -->
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-num font-serif">I</div>
+            <h3 class="feature-title font-serif">Open Match Book</h3>
+            <p class="feature-desc">A creator writes a dated question, picks a YES or NO position, sets event and resolve dates, attaches two independent sources, and posts the stake.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-num font-serif">II</div>
+            <h3 class="feature-title font-serif">Matched Stake</h3>
+            <p class="feature-desc">A counterparty joins by matching the creator's exact stake. The contest transitions to MATCHED and locks reserved stakes until the resolve date.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-num font-serif">III</div>
+            <h3 class="feature-title font-serif">Dual-Source Settlement</h3>
+            <p class="feature-desc">On or after resolve_after, validators examine both source pages. If both agree, the winner receives the pot. If inconclusive, timeout refunds open the next day.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- APP VIEW (The Working Floor) -->
+    <!-- ============================================================ -->
+    <section id="app-view" class="view-section is-hidden">
+      
+      <!-- Top Bar: Back to book, Stats, Network Pill, Wallet Controls, Theme Toggle -->
+      <header class="app-top-bar" id="app-top-bar">
+        <div class="top-bar-left">
+          <!-- #back-to-book button -->
+          <button type="button" class="btn-text-back" id="back-to-book" aria-label="Return to match book overview">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            <span>Return to book</span>
+          </button>
+          
+          <div class="app-brand-mini">
+            <img src="static/palaestra-logo-w.png" alt="Palaestra Logo" class="brand-logo-mini" width="28" height="28">
+            <span class="brand-name-mini font-serif">Palaestra</span>
+          </div>
+        </div>
+
+        <div class="top-bar-center">
+          <div class="floor-stats-pill" id="app-stats-pill" title="Live contract figures">
+            <div class="stat-item">
+              <span class="stat-label">Total Contests:</span>
+              <span class="stat-value font-mono" id="app-wager-count">&mdash;</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <span class="stat-label">Reserved Stakes:</span>
+              <span class="stat-value font-mono" id="app-reserved-stakes">&mdash; GEN</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="top-bar-right">
+          <!-- Network pill (Only on #app-view) -->
+          <div class="network-pill" id="network-pill" title="Network status">
+            <span class="network-dot"></span>
+            <span class="network-name" id="network-name">StudioNet</span>
+          </div>
+
+          <!-- Wallet controls (Only on #app-view) -->
+          <div class="wallet-container" id="wallet-container">
+            <button type="button" class="btn-wallet-connect" id="connect-wallet">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                <line x1="2" y1="10" x2="22" y2="10"></line>
+              </svg>
+              <span>Connect Wallet</span>
+            </button>
+            
+            <div class="wallet-connected-group is-hidden" id="wallet-connected-group">
+              <div class="wallet-address-display font-mono" id="wallet-address-short" title="Connected wallet address">
+                0x0000...0000
+              </div>
+              <button type="button" class="btn-wallet-disconnect" id="disconnect-wallet" title="Disconnect wallet" aria-label="Disconnect wallet">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                  <line x1="12" y1="2" x2="12" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Theme toggle on app view -->
+          <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+            <svg class="theme-icon sun-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="theme-icon moon-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Working Floor Layout -->
+      <div class="app-layout">
+        
+        <!-- Side Navigation Menu: Open, Match, Resolve, Lookup -->
+        <aside class="app-sidebar" id="app-sidebar">
+          <nav class="sidebar-nav">
+            <button type="button" class="nav-btn is-active" id="nav-open" data-target="panel-open">
+              <span class="nav-num font-mono">01</span>
+              <span class="nav-text">Open</span>
+              <span class="nav-sub">Create contest</span>
+            </button>
+            
+            <button type="button" class="nav-btn" id="nav-match" data-target="panel-match">
+              <span class="nav-num font-mono">02</span>
+              <span class="nav-text">Match</span>
+              <span class="nav-sub">Join contest</span>
+            </button>
+            
+            <button type="button" class="nav-btn" id="nav-resolve" data-target="panel-resolve">
+              <span class="nav-num font-mono">03</span>
+              <span class="nav-text">Resolve</span>
+              <span class="nav-sub">Settle &amp; refund</span>
+            </button>
+            
+            <button type="button" class="nav-btn" id="nav-lookup" data-target="panel-lookup">
+              <span class="nav-num font-mono">04</span>
+              <span class="nav-text">Lookup</span>
+              <span class="nav-sub">Inspect records</span>
+            </button>
+          </nav>
+
+          <div class="sidebar-footer">
+            <div class="sidebar-status-box">
+              <div class="status-indicator-row">
+                <span class="status-pulse"></span>
+                <span class="status-text">StudioNet Live</span>
+              </div>
+              <div class="status-meta font-mono">
+                Chain: 61999<br>
+                0x05Ea...eB1C
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Working Content Area -->
+        <div class="app-content-area">
+          
+          <!-- Global Write Flow Banner / Stepper -->
+          <div class="write-flow-container is-hidden" id="write-flow-container">
+            <div class="write-flow-card">
+              <div class="flow-header">
+                <div class="flow-title-group">
+                  <span class="flow-spinner"></span>
+                  <span class="flow-title" id="flow-title">Transaction In Flight</span>
+                </div>
+                <div class="flow-hash-wrap font-mono" id="flow-hash-wrap"></div>
+              </div>
+
+              <!-- 7 Phases: signature, submitted, wait finalized, consensus, execution, read, accepted -->
+              <div class="flow-stepper" id="flow-stepper">
+                <div class="step-item" data-step="signature">
+                  <div class="step-circle font-mono">1</div>
+                  <div class="step-label">Signature</div>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="submitted">
+                  <div class="step-circle font-mono">2</div>
+                  <div class="step-label">Submitted</div>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="wait finalized">
+                  <div class="step-circle font-mono">3</div>
+                  <div class="step-label">Wait Finalized</div>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="consensus">
+                  <div class="step-circle font-mono">4</div>
+                  <div class="step-label">Consensus</div>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="execution">
+                  <div class="step-circle font-mono">5</div>
+                  <div class="step-label">Execution</div>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="read">
+                  <div class="step-circle font-mono">6</div>
+                  <div class="step-label">Read</div>
+                </div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="accepted">
+                  <div class="step-circle font-mono">7</div>
+                  <div class="step-label">Accepted</div>
+                </div>
+              </div>
+
+              <div class="flow-message font-mono" id="flow-message">Awaiting signature from connected wallet...</div>
+            </div>
+          </div>
+
+          <!-- Alert Toast -->
+          <div class="floor-alert is-hidden" id="floor-alert">
+            <span class="alert-icon" id="alert-icon">&#8505;</span>
+            <span class="alert-text" id="alert-text"></span>
+            <button type="button" class="alert-close" id="alert-close" aria-label="Dismiss alert">&times;</button>
+          </div>
+
+          <!-- ======================================================== -->
+          <!-- WORKING PANELS (Only one has class is-visible) -->
+          <!-- ======================================================== -->
+
+          <!-- PANEL 01: OPEN -->
+          <div class="working-panel is-visible" id="panel-open">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-num font-mono">01</span>
+                <h2 class="panel-title font-serif">Open a New Contest</h2>
+              </div>
+              <p class="panel-desc">Set a dated question, designate two independent allowlisted public URLs, select your position, and stake GEN.</p>
+            </div>
+
+            <div class="floor-grid-layout">
+              <!-- Create Form -->
+              <div class="panel-card main-form-card">
+                <h3 class="card-heading font-serif">Contest Creation</h3>
+                
+                <form id="open-form" class="matchbook-form" novalidate>
+                  <!-- Question -->
+                  <div class="form-group">
+                    <label for="open-question" class="form-label">
+                      Question Statement <span class="req">*</span>
+                      <span class="label-hint">At least 12 characters</span>
+                    </label>
+                    <textarea id="open-question" name="question" class="form-input form-textarea" rows="3" placeholder="e.g. Did Manchester City win the Premier League match against Liverpool on 2026-11-15?" required minlength="12"></textarea>
+                  </div>
+
+                  <!-- Event Date & Resolve After -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="open-event-date" class="form-label">
+                        Event Date <span class="req">*</span>
+                        <span class="label-hint">YYYY-MM-DD</span>
+                      </label>
+                      <input type="date" id="open-event-date" name="event_date" class="form-input font-mono" required>
+                    </div>
+
+                    <div class="form-group">
+                      <label for="open-resolve-after" class="form-label">
+                        Resolve After <span class="req">*</span>
+                        <span class="label-hint">On or after event date</span>
+                      </label>
+                      <input type="date" id="open-resolve-after" name="resolve_after" class="form-input font-mono" required>
+                    </div>
+                  </div>
+
+                  <!-- Creator Side & Stake -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">
+                        Creator Side <span class="req">*</span>
+                        <span class="label-hint">YES or NO position</span>
+                      </label>
+                      <div class="side-selector" id="open-side-selector">
+                        <label class="side-option">
+                          <input type="radio" name="side" value="YES" checked>
+                          <span class="side-btn side-btn-yes font-mono">YES</span>
+                        </label>
+                        <label class="side-option">
+                          <input type="radio" name="side" value="NO">
+                          <span class="side-btn side-btn-no font-mono">NO</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="form-group">
+                      <label for="open-stake" class="form-label">
+                        Stake in GEN <span class="req">*</span>
+                        <span class="label-hint">Must be greater than zero</span>
+                      </label>
+                      <div class="input-with-affix">
+                        <input type="text" id="open-stake" name="stake" class="form-input font-mono" placeholder="1.0" required>
+                        <span class="input-suffix font-mono">GEN</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Source URLs -->
+                  <div class="form-group">
+                    <label for="open-source-a" class="form-label">
+                      Source URL A <span class="req">*</span>
+                      <span class="label-hint">Must be https:// and allowlisted</span>
+                    </label>
+                    <input type="url" id="open-source-a" name="source_url_a" class="form-input font-mono" placeholder="https://www.bbc.com/sport/football/..." required>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="open-source-b" class="form-label">
+                      Source URL B <span class="req">*</span>
+                      <span class="label-hint">Must be https:// from a different allowlisted host</span>
+                    </label>
+                    <input type="url" id="open-source-b" name="source_url_b" class="form-input font-mono" placeholder="https://www.reuters.com/sports/soccer/..." required>
+                  </div>
+
+                  <!-- Allowed hosts chips -->
+                  <div class="allowed-hosts-box">
+                    <span class="hosts-title">Permitted Host Domains:</span>
+                    <div class="hosts-chips-wrap font-mono">
+                      <span class="host-badge">bbc.com</span>
+                      <span class="host-badge">espn.com</span>
+                      <span class="host-badge">reuters.com</span>
+                      <span class="host-badge">apnews.com</span>
+                      <span class="host-badge">theguardian.com</span>
+                      <span class="host-badge">nytimes.com</span>
+                      <span class="host-badge">skysports.com</span>
+                      <span class="host-badge">goal.com</span>
+                      <span class="host-badge">flashscore.com</span>
+                      <span class="host-badge">sofascore.com</span>
+                      <span class="host-badge">cbssports.com</span>
+                      <span class="host-badge">nfl.com</span>
+                      <span class="host-badge">nba.com</span>
+                      <span class="host-badge">mlb.com</span>
+                      <span class="host-badge">nhl.com</span>
+                      <span class="host-badge">fifa.com</span>
+                      <span class="host-badge">uefa.com</span>
+                      <span class="host-badge">premierleague.com</span>
+                      <span class="host-badge">wikipedia.org</span>
+                    </div>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn-matchbook btn-submit" id="btn-open-submit">
+                      <span>Post Contest</span>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Cancel Subcard -->
+              <div class="panel-card sub-form-card">
+                <h3 class="card-heading font-serif">Cancel Unmatched Contest</h3>
+                <p class="card-subtext">The creator may cancel an <strong>OPEN</strong> contest before it is matched. The staked GEN will be returned to the creator's wallet.</p>
+                
+                <form id="cancel-form" class="matchbook-form" novalidate>
+                  <div class="form-group">
+                    <label for="cancel-wager-id" class="form-label">
+                      Contest ID <span class="req">*</span>
+                    </label>
+                    <input type="text" id="cancel-wager-id" name="wager_id" class="form-input font-mono" placeholder="e.g. 1" required>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn-secondary btn-cancel-action" id="btn-cancel-submit">
+                      <span>Cancel Unmatched Contest</span>
+                    </button>
+                  </div>
+                </form>
+
+                <div class="info-notice">
+                  <span class="notice-dot"></span>
+                  <span>Creator only, OPEN only. Matched contests cannot be cancelled; they close via resolve or timeout refund.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 02: MATCH -->
+          <div class="working-panel" id="panel-match">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-num font-mono">02</span>
+                <h2 class="panel-title font-serif">Match an Open Contest</h2>
+              </div>
+              <p class="panel-desc">Join an open contest by matching the creator's exact stake in GEN. Matching locks both stakes until the contest resolves.</p>
+            </div>
+
+            <div class="floor-grid-layout">
+              <!-- Match Form -->
+              <div class="panel-card main-form-card">
+                <h3 class="card-heading font-serif">Match Contest Details</h3>
+
+                <form id="match-form" class="matchbook-form" novalidate>
+                  <div class="form-group">
+                    <label for="match-wager-id" class="form-label">
+                      Contest ID <span class="req">*</span>
+                      <span class="label-hint">Enter the ID of the OPEN contest</span>
+                    </label>
+                    <div class="input-with-button">
+                      <input type="text" id="match-wager-id" name="wager_id" class="form-input font-mono" placeholder="e.g. 1" required>
+                      <button type="button" class="btn-secondary btn-small" id="btn-match-preview">
+                        <span>Fetch Stake</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="match-stake" class="form-label">
+                      Stake in GEN <span class="req">*</span>
+                      <span class="label-hint">Must equal the creator stake</span>
+                    </label>
+                    <div class="input-with-affix">
+                      <input type="text" id="match-stake" name="stake" class="form-input font-mono" placeholder="e.g. 1.0" required>
+                      <span class="input-suffix font-mono">GEN</span>
+                    </div>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn-matchbook btn-submit" id="btn-match-submit">
+                      <span>Match Contest</span>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="17 11 19 13 23 9"></polyline>
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                </form>
+
+                <!-- Preview Box for Match Form -->
+                <div class="wager-preview-box is-hidden" id="match-preview-container">
+                  <div class="preview-header">
+                    <span class="preview-title font-serif">Contest Summary</span>
+                    <span class="status-chip chip-open font-mono" id="match-preview-status">OPEN</span>
+                  </div>
+                  <p class="preview-question" id="match-preview-question">&mdash;</p>
+                  <div class="preview-details-grid">
+                    <div>
+                      <span class="p-label">Creator:</span>
+                      <span class="p-val font-mono" id="match-preview-creator">&mdash;</span>
+                    </div>
+                    <div>
+                      <span class="p-label">Creator Side:</span>
+                      <span class="p-val font-mono" id="match-preview-side">&mdash;</span>
+                    </div>
+                    <div>
+                      <span class="p-label">Joiner Position:</span>
+                      <span class="p-val font-mono" id="match-preview-counter">&mdash;</span>
+                    </div>
+                    <div>
+                      <span class="p-label">Required Stake:</span>
+                      <span class="p-val font-mono" id="match-preview-stake">&mdash; GEN</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Match Rules Card -->
+              <div class="panel-card sub-form-card">
+                <h3 class="card-heading font-serif">Matching Rules</h3>
+                <ul class="bullet-list">
+                  <li>Contest status must be <strong>OPEN</strong>.</li>
+                  <li>The creator cannot join their own contest.</li>
+                  <li>The join stake must match the creator stake to the exact wei.</li>
+                  <li>Matching changes the contest status to <strong>MATCHED</strong>.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 03: RESOLVE (Settle & Return Both Stakes) -->
+          <div class="working-panel" id="panel-resolve">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-num font-mono">03</span>
+                <h2 class="panel-title font-serif">Resolve &amp; Timeout Refunds</h2>
+              </div>
+              <p class="panel-desc">Settle contests via dual-source consensus or return stakes via timeout if consensus remained inconclusive.</p>
+            </div>
+
+            <div class="floor-grid-layout">
+              <!-- Settle (Resolve) Form -->
+              <div class="panel-card main-form-card">
+                <h3 class="card-heading font-serif">Settle Contest</h3>
+                <p class="card-subtext">MATCHED only, on or after <code>resolve_after</code>.</p>
+
+                <form id="resolve-form" class="matchbook-form" novalidate>
+                  <div class="form-group">
+                    <label for="resolve-wager-id" class="form-label">
+                      Contest ID <span class="req">*</span>
+                    </label>
+                    <input type="text" id="resolve-wager-id" name="wager_id" class="form-input font-mono" placeholder="e.g. 1" required>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn-matchbook btn-submit" id="btn-resolve-submit">
+                      <span>Settle</span>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </form>
+
+                <!-- Resolution Outcome Display -->
+                <div class="resolution-result-box is-hidden" id="resolve-result-box">
+                  <div class="res-header">
+                    <span class="res-title font-serif">Outcome Status</span>
+                    <span class="status-chip font-mono" id="resolve-status-chip">SETTLED</span>
+                  </div>
+                  <div class="res-body">
+                    <div class="res-item">
+                      <span class="res-label">Status:</span>
+                      <span class="res-val font-mono" id="resolve-res-status">&mdash;</span>
+                    </div>
+                    <div class="res-item">
+                      <span class="res-label">Verdict:</span>
+                      <span class="res-val font-mono" id="resolve-res-verdict">&mdash;</span>
+                    </div>
+                    <div class="res-item">
+                      <span class="res-label">Funds Disposition:</span>
+                      <span class="res-val font-mono" id="resolve-res-funds">&mdash;</span>
+                    </div>
+                  </div>
+                  <p class="res-note" id="resolve-res-note"></p>
+                </div>
+              </div>
+
+              <!-- Timeout Refund Form -->
+              <div class="panel-card sub-form-card">
+                <h3 class="card-heading font-serif">Timeout Refund</h3>
+                <p class="card-subtext">Returns both stakes to the creator and joiner.</p>
+
+                <form id="timeout-form" class="matchbook-form" novalidate>
+                  <div class="form-group">
+                    <label for="timeout-wager-id" class="form-label">
+                      Contest ID <span class="req">*</span>
+                    </label>
+                    <input type="text" id="timeout-wager-id" name="wager_id" class="form-input font-mono" placeholder="e.g. 1" required>
+                  </div>
+
+                  <!-- Required Exact Helper Text -->
+                  <p class="helper-text-highlight">
+                    Opens the UTC day after resolve after, and only while the match is still open.
+                  </p>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn-matchbook btn-refund" id="btn-timeout-submit">
+                      <span>Return both stakes</span>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </form>
+
+                <div class="info-notice">
+                  <span class="notice-dot"></span>
+                  <span>YES or NO settles the pot to that side. UNKNOWN and DISAGREE stay MATCHED. timeout_refund is the only path that returns both stakes, and it is not callable on the day resolve first opens.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 04: LOOKUP -->
+          <div class="working-panel" id="panel-lookup">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <span class="panel-num font-mono">04</span>
+                <h2 class="panel-title font-serif">Lookup &amp; Inspect Record</h2>
+              </div>
+              <p class="panel-desc">Query get_wager and can_resolve to view complete on-chain contest details.</p>
+            </div>
+
+            <!-- Lookup Search Form -->
+            <div class="lookup-search-container">
+              <form id="lookup-form" class="lookup-form-inline" novalidate>
+                <div class="form-group-inline">
+                  <label for="lookup-wager-id" class="sr-only">Contest ID</label>
+                  <input type="text" id="lookup-wager-id" name="wager_id" class="form-input form-input-lg font-mono" placeholder="Enter Contest ID (e.g. 1)" required>
+                  <button type="submit" class="btn-matchbook btn-submit" id="btn-lookup-submit">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>Lookup</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Rendered Ticket Result -->
+            <div class="lookup-result-wrap is-hidden" id="lookup-result-wrap">
+              <div class="match-ticket-card lookup-ticket-card">
+                
+                <div class="ticket-header">
+                  <div class="ticket-id-section">
+                    <span class="ticket-id font-mono" id="lookup-display-id">CONTEST #1</span>
+                    <span class="ticket-timestamp font-mono" id="lookup-display-now">UTC: &mdash;</span>
+                  </div>
+                  <div class="ticket-status-wrap">
+                    <span class="status-chip chip-open font-mono" id="lookup-display-status">OPEN</span>
+                  </div>
+                </div>
+
+                <div class="ticket-body-grid">
+                  <!-- Left Column -->
+                  <div class="ticket-left">
+                    <div class="ticket-field-group">
+                      <span class="ticket-label">Question</span>
+                      <p class="ticket-question" id="lookup-display-question">&mdash;</p>
+                    </div>
+
+                    <div class="ticket-addresses-grid">
+                      <div class="addr-box">
+                        <span class="ticket-label">Creator</span>
+                        <span class="addr-value font-mono" id="lookup-display-creator">&mdash;</span>
+                      </div>
+                      <div class="addr-box">
+                        <span class="ticket-label">Joiner</span>
+                        <span class="addr-value font-mono" id="lookup-display-joiner">&mdash;</span>
+                      </div>
+                    </div>
+
+                    <div class="ticket-dates-row">
+                      <div class="date-col">
+                        <span class="ticket-label">Event Date</span>
+                        <span class="date-value font-mono" id="lookup-display-event-date">&mdash;</span>
+                      </div>
+                      <div class="date-col">
+                        <span class="ticket-label">Resolve After</span>
+                        <span class="date-value font-mono" id="lookup-display-resolve-after">&mdash;</span>
+                      </div>
+                      <div class="date-col">
+                        <span class="ticket-label">Refund After</span>
+                        <span class="date-value font-mono" id="lookup-display-refund-after">&mdash;</span>
+                      </div>
+                    </div>
+
+                    <div class="ticket-sources">
+                      <span class="ticket-label">Both Sources (Source Pair)</span>
+                      <div class="source-item">
+                        <span class="source-host font-mono" id="lookup-display-host-a">Host A</span>
+                        <a href="#" target="_blank" rel="noopener noreferrer" class="source-url font-mono" id="lookup-display-source-a">&mdash;</a>
+                      </div>
+                      <div class="source-item">
+                        <span class="source-host font-mono" id="lookup-display-host-b">Host B</span>
+                        <a href="#" target="_blank" rel="noopener noreferrer" class="source-url font-mono" id="lookup-display-source-b">&mdash;</a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Brass Divider -->
+                  <div class="ticket-brass-divider"></div>
+
+                  <!-- Right Column -->
+                  <div class="ticket-right">
+                    <div class="stake-box">
+                      <span class="ticket-label">Stake</span>
+                      <div class="stake-amount font-mono" id="lookup-display-stake">&mdash; GEN</div>
+                      <span class="stake-sub font-mono" id="lookup-display-pot">Pot: &mdash; GEN</span>
+                    </div>
+
+                    <div class="sides-box">
+                      <span class="ticket-label">Creator Side</span>
+                      <div class="side-pill side-creator">
+                        <div class="side-role">Creator Selected:</div>
+                        <div class="side-pick font-mono" id="lookup-display-creator-side">YES</div>
+                      </div>
+                    </div>
+
+                    <div class="status-meta-card">
+                      <div class="meta-field">
+                        <span class="meta-label">Verdict:</span>
+                        <span class="meta-val font-mono" id="lookup-display-verdict">&mdash;</span>
+                      </div>
+                      <div class="meta-field">
+                        <span class="meta-label">Funds Disposition:</span>
+                        <span class="meta-val font-mono" id="lookup-display-funds">&mdash;</span>
+                      </div>
+                      <div class="meta-field">
+                        <span class="meta-label">Allowed (can resolve):</span>
+                        <span class="meta-val font-mono" id="lookup-display-allowed">&mdash;</span>
+                      </div>
+                      <div class="meta-field">
+                        <span class="meta-label">Timeout Refund Allowed:</span>
+                        <span class="meta-val font-mono" id="lookup-display-timeout-allowed">&mdash;</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ticket-footer-actions">
+                  <button type="button" class="btn-small btn-secondary is-hidden" id="lookup-action-match">
+                    Match this Contest
+                  </button>
+                  <button type="button" class="btn-small btn-secondary is-hidden" id="lookup-action-resolve">
+                    Resolve this Contest
+                  </button>
+                  <button type="button" class="btn-small btn-secondary is-hidden" id="lookup-action-refund">
+                    Return Stakes (Timeout)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State / Placeholder -->
+            <div class="lookup-empty-state" id="lookup-empty-state">
+              <div class="empty-icon">&#128220;</div>
+              <h3 class="empty-title font-serif">No Contest Loaded</h3>
+              <p class="empty-desc">Enter a Contest ID above to retrieve full on-chain status, creator, joiner, dates, sources, and resolution state.</p>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="palaestra-footer">
+      <div class="footer-content">
+        <div class="footer-left">
+          <span class="footer-brand font-serif">Palaestra</span>
+          <span class="footer-desc">Two-sided dated contest match book on GenLayer StudioNet.</span>
+        </div>
+        <div class="footer-right">
+          <span class="footer-contract font-mono">0x05Ea4308905A80354515B991a35f1BE09186eB1C</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Immediate View, Theme & Navigation Controller (Synchronous, 0ms Delay) -->
+  <script>
+    (function() {
+      // 1. Initial view restoration
+      function applyView(v) {
+        var landing = document.getElementById('landing-view');
+        var app = document.getElementById('app-view');
+        if (v === 'floor') {
+          if (landing) {
+            landing.classList.add('is-hidden');
+            landing.classList.remove('is-active');
+          }
+          if (app) {
+            app.classList.remove('is-hidden');
+            app.classList.add('is-active');
+          }
+        } else {
+          if (app) {
+            app.classList.add('is-hidden');
+            app.classList.remove('is-active');
+          }
+          if (landing) {
+            landing.classList.remove('is-hidden');
+            landing.classList.add('is-active');
+          }
+        }
+      }
+
+      try {
+        var savedView = localStorage.getItem('palaestra.view');
+        applyView(savedView === 'floor' ? 'floor' : 'book');
+      } catch (e) {}
+
+      // 2. Global View Switch Helper
+      window.setPalaestraView = function(viewName) {
+        var target = viewName === 'floor' ? 'floor' : 'book';
+        applyView(target);
+        try {
+          localStorage.setItem('palaestra.view', target);
+        } catch (e) {}
+        if (typeof window.onPalaestraViewChanged === 'function') {
+          window.onPalaestraViewChanged(target);
+        }
+      };
+
+      // 3. Document Click Delegation for Instant Feedback
+      document.addEventListener('click', function(e) {
+        var enterBtn = e.target.closest('#enter-floor');
+        if (enterBtn) {
+          e.preventDefault();
+          window.setPalaestraView('floor');
+          return;
+        }
+
+        var backBtn = e.target.closest('#back-to-book');
+        if (backBtn) {
+          e.preventDefault();
+          window.setPalaestraView('book');
+          return;
+        }
+
+        var themeBtn = e.target.closest('.theme-toggle-btn');
+        if (themeBtn) {
+          e.preventDefault();
+          var curr = document.documentElement.getAttribute('data-theme') || 'dark';
+          var next = curr === 'light' ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', next);
+          try {
+            localStorage.setItem('palaestra.theme', next);
+          } catch (err) {}
+          return;
+        }
+
+        var navBtn = e.target.closest('.sidebar-nav .nav-btn');
+        if (navBtn) {
+          var targetPanel = navBtn.dataset.target;
+          if (targetPanel) {
+            var panels = document.querySelectorAll('.working-panel');
+            for (var i = 0; i < panels.length; i++) {
+              panels[i].classList.remove('is-visible');
+            }
+            var pEl = document.getElementById(targetPanel);
+            if (pEl) pEl.classList.add('is-visible');
+
+            var navBtns = document.querySelectorAll('.sidebar-nav .nav-btn');
+            for (var j = 0; j < navBtns.length; j++) {
+              navBtns[j].classList.remove('is-active');
+            }
+            navBtn.classList.add('is-active');
+          }
+        }
+      });
+    })();
+  </script>
+
+  <!-- Application Logic & GenLayer Module -->
+  <script type="module" src="static/app.js"></script>
+</body>
+</html>
