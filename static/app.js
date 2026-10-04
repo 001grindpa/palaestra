@@ -149,8 +149,12 @@ const state = {
 };
 
 // ============================================================================
-// Pure BigInt Currency Conversion (Zero Number / Math.round)
+// Address & BigInt Currency Conversion Helpers
 // ============================================================================
+function isValidAddress(addr) {
+  return typeof addr === "string" && /^0x[a-fA-F0-9]{40}$/.test(addr.trim());
+}
+
 function parseGenToWei(genStr) {
   if (!genStr || typeof genStr !== "string") {
     throw new Error("Invalid stake amount");
@@ -201,8 +205,9 @@ function formatWeiToGen(weiVal) {
 
 function shortenAddress(addr) {
   if (!addr || typeof addr !== "string") return "—";
-  if (addr.length <= 10) return addr;
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const trimmed = addr.trim();
+  if (trimmed.length <= 10) return trimmed;
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
 }
 
 // ============================================================================
@@ -215,18 +220,6 @@ function getReadClient() {
     });
   }
   return state.readClient;
-}
-
-function getWriteClient() {
-  if (!state.injectedProvider || !state.walletAddress) {
-    return null;
-  }
-  state.client = createClient({
-    chain: studionet,
-    provider: state.injectedProvider,
-    account: state.walletAddress
-  });
-  return state.client;
 }
 
 // Direct JSON-RPC fallback for receipt polling if needed
@@ -380,13 +373,13 @@ async function connectWallet() {
 
   try {
     const accounts = await provider.request({ method: "eth_requestAccounts" });
-    if (!accounts || accounts.length === 0) {
-      showAlert("Wallet connection cancelled.", "error");
+    if (!accounts || accounts.length === 0 || !isValidAddress(accounts[0])) {
+      showAlert("Wallet connection cancelled or invalid address.", "error");
       return;
     }
 
     state.injectedProvider = provider;
-    state.walletAddress = accounts[0];
+    state.walletAddress = accounts[0].trim();
     localStorage.setItem(STORAGE_KEYS.WALLET, state.walletAddress);
 
     // Verify / switch chain to StudioNet (61999)
@@ -419,9 +412,6 @@ async function connectWallet() {
       console.warn("Chain verification error:", netErr);
     }
 
-    // Bind write client
-    getWriteClient();
-
     updateWalletUI();
     showAlert(`Connected: ${shortenAddress(state.walletAddress)}`, "success");
   } catch (err) {
@@ -444,7 +434,7 @@ function updateWalletUI() {
   const connectedGroup = document.getElementById("wallet-connected-group");
   const addrDisplay = document.getElementById("wallet-address-short");
 
-  if (state.walletAddress) {
+  if (state.walletAddress && isValidAddress(state.walletAddress)) {
     if (connectBtn) connectBtn.classList.add("is-hidden");
     if (connectedGroup) connectedGroup.classList.remove("is-hidden");
     if (addrDisplay) {
@@ -459,16 +449,15 @@ function updateWalletUI() {
 
 async function autoRestoreWallet() {
   const saved = localStorage.getItem(STORAGE_KEYS.WALLET);
-  if (!saved) return;
+  if (!saved || !isValidAddress(saved)) return;
   const provider = getPreferredProvider();
   if (!provider) return;
 
   try {
     const accounts = await provider.request({ method: "eth_accounts" });
-    if (accounts && accounts.length > 0 && accounts[0].toLowerCase() === saved.toLowerCase()) {
+    if (accounts && accounts.length > 0 && isValidAddress(accounts[0]) && accounts[0].toLowerCase() === saved.toLowerCase()) {
       state.injectedProvider = provider;
-      state.walletAddress = accounts[0];
-      getWriteClient();
+      state.walletAddress = accounts[0].trim();
       updateWalletUI();
     }
   } catch (e) {
@@ -599,13 +588,56 @@ async function pollReceiptWithPhases(client, txHash) {
 // Contract Write Executor (Always writeContract, Never eth_sendTransaction Send)
 // ============================================================================
 async function executeContractWrite(methodName, args = [], valueWei = null, promptTitle = "Submitting Transaction") {
-  if (!state.walletAddress || !state.injectedProvider) {
-    showAlert("Please connect your wallet to execute this action.", "error");
-    throw new Error("Wallet not connected");
+  // 1. Stop if state.walletAddress is missing or not 0x plus 40 hex chars
+  if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+    showAlert("Wallet address is required before posting", "error");
+    throw new Error("Wallet address is required before posting");
   }
 
-  // Bind the client to injected provider and connected account before every write
-  const client = getWriteClient();
+  // 2. Validate provider
+  const provider = state.injectedProvider || getPreferredProvider();
+  if (!provider) {
+    showAlert("No Web3 wallet provider connected. Please connect your wallet.", "error");
+    throw new Error("Wallet address is required before posting");
+  }
+  state.injectedProvider = provider;
+
+  const validAddress = state.walletAddress.trim();
+
+  // 3. CONTRACT_ADDRESS must be the deployed 0x address, never undefined
+  if (!CONTRACT_ADDRESS || !isValidAddress(CONTRACT_ADDRESS)) {
+    throw new Error("Invalid or undefined CONTRACT_ADDRESS: " + CONTRACT_ADDRESS);
+  }
+
+  // 4. Build write account structure that satisfies genlayer-js mt/pt .address access and viem
+  const accountForWrite = {
+    address: validAddress,
+    type: "json-rpc",
+    toLowerCase() { return validAddress.toLowerCase(); },
+    toUpperCase() { return validAddress.toUpperCase(); },
+    slice(...args) { return validAddress.slice(...args); },
+    substring(...args) { return validAddress.substring(...args); },
+    trim() { return validAddress.trim(); },
+    toString() { return validAddress; },
+    valueOf() { return validAddress; },
+    [Symbol.toPrimitive]() { return validAddress; }
+  };
+
+  // 5. Build write client only after account check, with chain studionet, account, and injected provider
+  let client;
+  try {
+    client = createClient({
+      chain: studionet,
+      provider: state.injectedProvider,
+      account: validAddress
+    });
+    state.client = client;
+  } catch (err) {
+    console.error("Failed to build write client:", err);
+    showAlert("Contract call client is not ready.", "error");
+    throw err;
+  }
+
   if (!client || typeof client.writeContract !== "function") {
     showAlert("Contract call client is not ready.", "error");
     throw new Error("Contract call client is not ready.");
@@ -619,21 +651,22 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
     // Phase 1: signature
     updateWriteFlowUI("signature", "Awaiting signature from connected wallet...");
 
-    // Log the payload functionName before submit
+    // Log payload functionName before submit
     console.log("Submitting contract write:", {
       functionName: methodName,
       args: args,
       value: valueWei !== null ? valueWei.toString() : "nonpayable (no value)",
-      account: state.walletAddress,
+      account: validAddress,
       address: CONTRACT_ADDRESS
     });
 
+    // 6. Pass account into writeContract
     const writeParams = {
       address: CONTRACT_ADDRESS,
       abi: CONTRACT_ABI,
       functionName: methodName,
       args: args,
-      account: state.walletAddress
+      account: accountForWrite
     };
 
     // Payable methods: pass value as bigint. Nonpayable methods: do not set value.
@@ -826,6 +859,12 @@ function initOpenForm() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    // Check wallet connection before doing form operations
+    if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+      showAlert("Wallet address is required before posting", "error");
+      return;
+    }
+
     const questionInput = document.getElementById("open-question");
     const eventDateInput = document.getElementById("open-event-date");
     const resolveAfterInput = document.getElementById("open-resolve-after");
@@ -887,6 +926,7 @@ function initOpenForm() {
     }
 
     try {
+      // create_wager args are six strings only: question, event_date, resolve_after, side, source_url_a, source_url_b. Do not put an address in args. value is the stake bigint.
       const result = await executeContractWrite(
         "create_wager",
         [question, eventDate, resolveAfter, side, sourceA, sourceB],
@@ -967,6 +1007,11 @@ function initMatchForm() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+      showAlert("Wallet address is required before posting", "error");
+      return;
+    }
+
     const wagerIdInput = document.getElementById("match-wager-id");
     const stakeInput = document.getElementById("match-stake");
 
@@ -1017,6 +1062,11 @@ function initCancelForm() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+      showAlert("Wallet address is required before posting", "error");
+      return;
+    }
+
     const wagerIdInput = document.getElementById("cancel-wager-id");
     const wagerId = (wagerIdInput?.value || "").trim();
 
@@ -1052,6 +1102,11 @@ function initResolveForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+      showAlert("Wallet address is required before posting", "error");
+      return;
+    }
 
     const wagerIdInput = document.getElementById("resolve-wager-id");
     const wagerId = (wagerIdInput?.value || "").trim();
@@ -1115,6 +1170,11 @@ function initTimeoutForm() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+      showAlert("Wallet address is required before posting", "error");
+      return;
+    }
 
     const wagerIdInput = document.getElementById("timeout-wager-id");
     const wagerId = (wagerIdInput?.value || "").trim();

@@ -1,5 +1,9 @@
 # Palaestra
 
+<div align="center">
+  <img src="static/palaestra-logo-w.png" alt="Palaestra logo" width="72" height="72">
+</div>
+
 Palaestra is a two-sided dated contest match book deployed on GenLayer StudioNet.
 
 Two counterparties take opposing positions on an unambiguous calendar-dated proposition. Settlement is adjudicated on-chain via GenLayer validator consensus examining two independent allowlisted public web pages.
@@ -13,6 +17,23 @@ Two counterparties take opposing positions on an unambiguous calendar-dated prop
 - **RPC Endpoint**: `https://studio.genlayer.com/api`
 - **Block Explorer**: `https://explorer-studio.genlayer.com`
 - **Contract Address**: `0x05Ea4308905A80354515B991a35f1BE09186eB1C`
+
+---
+
+## Live Floor
+
+Explorer: https://explorer-studio.genlayer.com/address/0x05Ea4308905A80354515B991a35f1BE09186eB1C
+
+### Match 1, returned to both sides
+- post `0x72f0cc1c83af5e5a1e1a1e81c8bf38f1b672e5ed0ba509b79d99afcb8ea491a2`
+- match `0x233bbfb4afacb30df6a31ea3cd682debba67715c8565114472c269855f78803c`
+- return both stakes `0x7e08a9ff449185b480e15e88e093a1f4b38760dab5fae6f327823ad3abd5bf04`
+- id 1, expected `REFUNDED` / `TIMEOUT` / `REFUNDED_TO_BOTH`
+
+### Match 2, cancelled before a joiner
+- post `0x0220ecc31ae125afeb8df87e83dfe952b745048dfe8e7f3674c4321bcc9a7539`
+- cancel `0xe2b053ef3986cad55ed375c64af00064285a14e40141ac263bf7945915359d35`
+- id 2, expected `CANCELLED` / `REFUNDED_TO_CREATOR`
 
 ---
 
