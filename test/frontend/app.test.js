@@ -1,6 +1,15 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import {
+
+const memory = new Map();
+globalThis.localStorage = {
+  getItem: (key) => memory.get(key) ?? null,
+  setItem: (key, value) => memory.set(key, String(value)),
+  removeItem: (key) => memory.delete(key),
+};
+
+const app = await import("../../static/app.js");
+const {
   CHAIN_ID,
   ABI,
   state,
@@ -8,7 +17,11 @@ import {
   validatePair,
   ensureWalletReady,
   executeWriteFlow,
-} from "../../static/app.js";
+} = app;
+
+if (!state) {
+  throw new Error("static/app.js must export state");
+}
 
 describe("Palaestra", () => {
   beforeEach(() => {
@@ -16,9 +29,11 @@ describe("Palaestra", () => {
     state.walletAddress = "";
     state.chainId = null;
     state.inFlight = false;
+    state.client = null;
   });
 
   it("parses stake with bigint only", () => {
+    assert.equal(typeof parseStake, "function");
     assert.equal(parseStake("0.05"), 50000000000000000n);
     assert.equal(parseStake("1"), 1000000000000000000n);
     assert.throws(() => parseStake("0"), /greater than zero/);
@@ -26,6 +41,7 @@ describe("Palaestra", () => {
   });
 
   it("requires two different allowlisted hosts", () => {
+    assert.equal(typeof validatePair, "function");
     assert.throws(
       () => validatePair("https://www.bbc.com/sport", "https://www.bbc.com/news"),
       /different hosts/

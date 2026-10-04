@@ -3,14 +3,21 @@
  * Client Controller & GenLayer StudioNet Integration
  */
 
-import { createClient } from "https://esm.sh/genlayer-js";
-import { studionet } from "https://esm.sh/genlayer-js/chains";
+let sdkPromise = null;
+
+async function loadSdk() {
+  if (typeof window === "undefined") {
+    return { createClient() { return null; }, studionet: { id: 61999 } };
+  }
+  if (!sdkPromise) sdkPromise = import("https://esm.sh/genlayer@0.18.0");
+  return sdkPromise;
+}
 
 // ============================================================================
 // Constants & Configuration
 // ============================================================================
 const CONTRACT_ADDRESS = "0x05Ea4308905A80354515B991a35f1BE09186eB1C";
-const CHAIN_ID_DECIMAL = 61999;
+export const CHAIN_ID = 61999;
 const CHAIN_ID_HEX = "0xf22f";
 const RPC_ENDPOINT = "https://studio.genlayer.com/api";
 const EXPLORER_BASE = "https://explorer-studio.genlayer.com";
@@ -134,17 +141,18 @@ const CONTRACT_ABI = [
     outputs: [{ name: "", type: "string" }]
   }
 ];
+export const ABI = CONTRACT_ABI;
 
 // ============================================================================
 // State
 // ============================================================================
-const state = {
+export const state = {
+  provider: null,
+  walletAddress: "",
+  chainId: null,
+  inFlight: false,
   client: null,
   readClient: null,
-  walletAddress: null,
-  chainId: null,
-  injectedProvider: null,
-  isWriteInFlight: false,
   detectedEip6963Providers: []
 };
 
@@ -178,11 +186,12 @@ function parseGenToWei(genStr) {
   const totalWei = wholeUnits + fractionUnits;
 
   if (totalWei <= 0n) {
-    throw new Error("Stake must be strictly greater than 0 GEN");
+    throw new Error("Stake must be greater than zero GEN");
   }
 
   return totalWei;
 }
+export { parseGenToWei as parseStake };
 
 function formatWeiToGen(weiVal) {
   if (weiVal === null || weiVal === undefined) return "0 GEN";
@@ -213,8 +222,9 @@ function shortenAddress(addr) {
 // ============================================================================
 // Client Initialization (Read Client & Write Client)
 // ============================================================================
-function getReadClient() {
+async function getReadClient() {
   if (!state.readClient) {
+    const { createClient, studionet } = await loadSdk();
     state.readClient = createClient({
       chain: studionet
     });
@@ -250,7 +260,7 @@ async function callDirectRpc(method, params) {
 // Read Contract Functions (via state.client.readContract / getReadClient)
 // ============================================================================
 async function readWager(wagerId) {
-  const client = getReadClient();
+  const client = await getReadClient();
   const raw = await client.readContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
@@ -262,7 +272,7 @@ async function readWager(wagerId) {
 }
 
 async function readCanResolve(wagerId) {
-  const client = getReadClient();
+  const client = await getReadClient();
   try {
     const raw = await client.readContract({
       address: CONTRACT_ADDRESS,
@@ -279,7 +289,7 @@ async function readCanResolve(wagerId) {
 }
 
 async function readWagerCount() {
-  const client = getReadClient();
+  const client = await getReadClient();
   try {
     const raw = await client.readContract({
       address: CONTRACT_ADDRESS,
@@ -295,7 +305,7 @@ async function readWagerCount() {
 }
 
 async function readReservedStakes() {
-  const client = getReadClient();
+  const client = await getReadClient();
   try {
     const raw = await client.readContract({
       address: CONTRACT_ADDRESS,
@@ -378,7 +388,7 @@ async function connectWallet() {
       return;
     }
 
-    state.injectedProvider = provider;
+    state.provider = provider;
     state.walletAddress = accounts[0].trim();
     localStorage.setItem(STORAGE_KEYS.WALLET, state.walletAddress);
 
@@ -387,7 +397,7 @@ async function connectWallet() {
       const chainIdHex = await provider.request({ method: "eth_chainId" });
       state.chainId = parseInt(chainIdHex, 16);
 
-      if (state.chainId !== CHAIN_ID_DECIMAL) {
+      if (state.chainId !== CHAIN_ID) {
         try {
           await provider.request({
             method: "wallet_switchEthereumChain",
@@ -422,7 +432,7 @@ async function connectWallet() {
 
 function disconnectWallet() {
   state.walletAddress = null;
-  state.injectedProvider = null;
+  state.provider = null;
   state.client = null;
   localStorage.removeItem(STORAGE_KEYS.WALLET);
   updateWalletUI();
@@ -456,12 +466,30 @@ async function autoRestoreWallet() {
   try {
     const accounts = await provider.request({ method: "eth_accounts" });
     if (accounts && accounts.length > 0 && isValidAddress(accounts[0]) && accounts[0].toLowerCase() === saved.toLowerCase()) {
-      state.injectedProvider = provider;
+      state.provider = provider;
       state.walletAddress = accounts[0].trim();
       updateWalletUI();
     }
   } catch (e) {
     console.warn("Auto restore wallet skipped:", e);
+  }
+}
+
+export async function ensureWalletReady() {
+  if (!state.walletAddress || !isValidAddress(state.walletAddress)) {
+    throw new Error("Wallet address is required before posting");
+  }
+  if (!state.provider || typeof state.provider.request !== "function") {
+    throw new Error("No Web3 wallet provider connected.");
+  }
+
+  const chainId = await state.provider.request({ method: "eth_chainId" });
+  const parsedChainId = typeof chainId === "string" && chainId.startsWith("0x")
+    ? Number.parseInt(chainId, 16)
+    : Number(chainId);
+  state.chainId = parsedChainId;
+  if (parsedChainId !== CHAIN_ID) {
+    throw new Error(`Wallet must be connected to StudioNet (chain ${CHAIN_ID}).`);
   }
 }
 
@@ -595,12 +623,12 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
   }
 
   // 2. Validate provider
-  const provider = state.injectedProvider || getPreferredProvider();
+  const provider = state.provider || getPreferredProvider();
   if (!provider) {
     showAlert("No Web3 wallet provider connected. Please connect your wallet.", "error");
     throw new Error("Wallet address is required before posting");
   }
-  state.injectedProvider = provider;
+  state.provider = provider;
 
   const validAddress = state.walletAddress.trim();
 
@@ -626,9 +654,10 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
   // 5. Build write client only after account check, with chain studionet, account, and injected provider
   let client;
   try {
+    const { createClient, studionet } = await loadSdk();
     client = createClient({
       chain: studionet,
-      provider: state.injectedProvider,
+      provider: state.provider,
       account: validAddress
     });
     state.client = client;
@@ -643,7 +672,7 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
     throw new Error("Contract call client is not ready.");
   }
 
-  state.isWriteInFlight = true;
+  state.inFlight = true;
   const titleEl = document.getElementById("flow-title");
   if (titleEl) titleEl.textContent = promptTitle;
 
@@ -704,13 +733,55 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
     await new Promise(r => setTimeout(r, 2000));
 
     updateWriteFlowUI(null, "");
-    state.isWriteInFlight = false;
+    state.inFlight = false;
     return { txHash, wager: latestWager };
   } catch (err) {
-    state.isWriteInFlight = false;
+    state.inFlight = false;
     updateWriteFlowUI(null, "");
     showAlert(err.message || String(err), "error");
     throw err;
+  }
+}
+
+export async function executeWriteFlow(functionName, args, value, afterAccepted) {
+  await ensureWalletReady();
+  if (!state.client || typeof state.client.writeContract !== "function") {
+    throw new Error("Contract call client is not ready.");
+  }
+  if (typeof state.client.waitForTransactionReceipt !== "function") {
+    throw new Error("Transaction receipt client is not ready.");
+  }
+
+  state.inFlight = true;
+  try {
+    const transaction = {
+      address: CONTRACT_ADDRESS,
+      abi: ABI,
+      functionName,
+      args,
+      account: state.walletAddress
+    };
+    if (value !== null && value !== undefined && value > 0n) {
+      transaction.value = value;
+    }
+
+    const txHash = await state.client.writeContract(transaction);
+    if (!txHash) {
+      throw new Error("No transaction hash returned from wallet.");
+    }
+
+    const receipt = await state.client.waitForTransactionReceipt({ hash: txHash });
+    const statusName = String(receipt?.statusName || "").toUpperCase();
+    if (statusName !== "FINALIZED" && Number(receipt?.status) !== 7) {
+      throw new Error("Transaction did not reach FINALIZED status.");
+    }
+
+    if (typeof afterAccepted === "function") {
+      await afterAccepted(txHash, receipt);
+    }
+    return txHash;
+  } finally {
+    state.inFlight = false;
   }
 }
 
@@ -763,6 +834,17 @@ function validateUrls(urlA, urlB) {
     return { valid: false, error: "Source A and Source B must come from different allowlisted domains." };
   }
   return { valid: true, hostA, hostB };
+}
+
+export function validatePair(urlA, urlB) {
+  const result = validateUrls(urlA, urlB);
+  if (!result.valid) {
+    if (result.error.includes("different allowlisted domains")) {
+      throw new Error("Source URLs must use different hosts.");
+    }
+    throw new Error(result.error);
+  }
+  return [urlA, urlB];
 }
 
 function showAlert(message, type = "info") {
@@ -823,12 +905,14 @@ function setView(viewName) {
   }
 }
 
-window.onPalaestraViewChanged = function(viewName) {
-  if (viewName === "floor") {
-    autoRestoreWallet();
-    refreshFloorCounters();
-  }
-};
+if (typeof window !== "undefined") {
+  window.onPalaestraViewChanged = function(viewName) {
+    if (viewName === "floor") {
+      autoRestoreWallet();
+      refreshFloorCounters();
+    }
+  };
+}
 
 function setPanel(panelId) {
   const panels = document.querySelectorAll(".working-panel");
@@ -1421,12 +1505,14 @@ function initUI() {
   refreshFloorCounters();
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => {
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      initEip6963();
+      initUI();
+    });
+  } else {
     initEip6963();
     initUI();
-  });
-} else {
-  initEip6963();
-  initUI();
+  }
 }
