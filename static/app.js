@@ -9,7 +9,19 @@ async function loadSdk() {
   if (typeof window === "undefined") {
     return { createClient() { return null; }, studionet: { id: 61999 } };
   }
-  if (!sdkPromise) sdkPromise = import("https://esm.sh/genlayer@0.18.0");
+  const loadedSdk = window.genlayerSDK;
+  if (loadedSdk) {
+    return {
+      createClient: loadedSdk.createClient,
+      studionet: loadedSdk.studionet || loadedSdk.chains?.studionet
+    };
+  }
+  if (!sdkPromise) {
+    sdkPromise = import("./genlayer.js").then(sdk => ({
+      createClient: sdk.createClient,
+      studionet: sdk.studionet || sdk.chains?.studionet
+    }));
+  }
   return sdkPromise;
 }
 
@@ -17,6 +29,7 @@ async function loadSdk() {
 // Constants & Configuration
 // ============================================================================
 const CONTRACT_ADDRESS = "0x05Ea4308905A80354515B991a35f1BE09186eB1C";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 export const CHAIN_ID = 61999;
 const CHAIN_ID_HEX = "0xf22f";
 const RPC_ENDPOINT = "https://studio.genlayer.com/api";
@@ -219,6 +232,10 @@ function shortenAddress(addr) {
   return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
 }
 
+function getReadAccount() {
+  return { address: isValidAddress(state.walletAddress) ? state.walletAddress : ZERO_ADDRESS };
+}
+
 // ============================================================================
 // Client Initialization (Read Client & Write Client)
 // ============================================================================
@@ -262,6 +279,7 @@ async function callDirectRpc(method, params) {
 async function readWager(wagerId) {
   const client = await getReadClient();
   const raw = await client.readContract({
+    account: getReadAccount(),
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: "get_wager",
@@ -275,6 +293,7 @@ async function readCanResolve(wagerId) {
   const client = await getReadClient();
   try {
     const raw = await client.readContract({
+      account: getReadAccount(),
       address: CONTRACT_ADDRESS,
       abi: CONTRACT_ABI,
       functionName: "can_resolve",
@@ -290,24 +309,21 @@ async function readCanResolve(wagerId) {
 
 async function readWagerCount() {
   const client = await getReadClient();
-  try {
-    const raw = await client.readContract({
-      address: CONTRACT_ADDRESS,
-      abi: CONTRACT_ABI,
-      functionName: "get_wager_count",
-      args: []
-    });
-    return BigInt(raw || "0");
-  } catch (err) {
-    console.error("readWagerCount error:", err);
-    return 0n;
-  }
+  const raw = await client.readContract({
+    account: getReadAccount(),
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "get_wager_count",
+    args: []
+  });
+  return BigInt(raw || "0");
 }
 
 async function readReservedStakes() {
   const client = await getReadClient();
   try {
     const raw = await client.readContract({
+      account: getReadAccount(),
       address: CONTRACT_ADDRESS,
       abi: CONTRACT_ABI,
       functionName: "get_reserved_stakes",
