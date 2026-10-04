@@ -3,6 +3,9 @@
  * Client Controller & GenLayer StudioNet Integration
  */
 
+import { createClient } from "https://esm.sh/genlayer-js";
+import { studionet } from "https://esm.sh/genlayer-js/chains";
+
 // ============================================================================
 // Constants & Configuration
 // ============================================================================
@@ -11,27 +14,6 @@ const CHAIN_ID_DECIMAL = 61999;
 const CHAIN_ID_HEX = "0xf22f";
 const RPC_ENDPOINT = "https://studio.genlayer.com/api";
 const EXPLORER_BASE = "https://explorer-studio.genlayer.com";
-
-const STUDIONET_CHAIN = {
-  id: CHAIN_ID_DECIMAL,
-  name: "GenLayer StudioNet",
-  rpcUrls: {
-    default: {
-      http: [RPC_ENDPOINT]
-    }
-  },
-  nativeCurrency: {
-    name: "GEN Token",
-    symbol: "GEN",
-    decimals: 18
-  },
-  blockExplorers: {
-    default: {
-      name: "GenLayer Explorer",
-      url: EXPLORER_BASE
-    }
-  }
-};
 
 const STORAGE_KEYS = {
   VIEW: "palaestra.view",
@@ -80,185 +62,91 @@ const ALLOWED_HOSTS = [
   "en.wikipedia.org"
 ];
 
+const CONTRACT_ABI = [
+  {
+    name: "create_wager",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "question", type: "string" },
+      { name: "event_date", type: "string" },
+      { name: "resolve_after", type: "string" },
+      { name: "side", type: "string" },
+      { name: "source_url_a", type: "string" },
+      { name: "source_url_b", type: "string" }
+    ],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    name: "join",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [{ name: "wager_id", type: "string" }],
+    outputs: []
+  },
+  {
+    name: "cancel",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "wager_id", type: "string" }],
+    outputs: []
+  },
+  {
+    name: "resolve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "wager_id", type: "string" }],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    name: "timeout_refund",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "wager_id", type: "string" }],
+    outputs: []
+  },
+  {
+    name: "can_resolve",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "wager_id", type: "string" }],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    name: "get_wager",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "wager_id", type: "string" }],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    name: "get_wager_count",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    name: "get_reserved_stakes",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  }
+];
+
 // ============================================================================
 // State
 // ============================================================================
 const state = {
   client: null,
+  readClient: null,
   walletAddress: null,
   chainId: null,
   injectedProvider: null,
   isWriteInFlight: false,
   detectedEip6963Providers: []
 };
-
-// ============================================================================
-// Calldata Binary Encoder / Decoder for Direct RPC Fallback & Client
-// ============================================================================
-const CAL_SHIFT = 3, CAL_TAG_INT = 1, CAL_TAG_NEG = 2, CAL_TAG_BYTES = 3, CAL_TAG_STR = 4, CAL_TAG_ARR = 5, CAL_TAG_MAP = 6;
-const CAL_NULL = 0 << CAL_SHIFT | 0, CAL_FALSE = 1 << CAL_SHIFT | 0, CAL_TRUE = 2 << CAL_SHIFT | 0;
-
-function encodeVarInt(target, val) {
-  if (val === 0n) { target.push(0); return; }
-  while (val > 0n) {
-    let b = Number(val & 0x7fn);
-    val >>= 7n;
-    if (val > 0n) b |= 128;
-    target.push(b);
-  }
-}
-
-function encodeTaggedInt(target, val, tag) {
-  const composite = (val << BigInt(CAL_SHIFT)) | BigInt(tag);
-  encodeVarInt(target, composite);
-}
-
-function encodeInt(target, val) {
-  if (val >= 0n) encodeTaggedInt(target, val, CAL_TAG_INT);
-  else encodeTaggedInt(target, -val - 1n, CAL_TAG_NEG);
-}
-
-function compareByteArrays(a, b) {
-  for (let i = 0; i < a.length && i < b.length; i++) {
-    const diff = a[i] - b[i];
-    if (diff !== 0) return diff;
-  }
-  return a.length - b.length;
-}
-
-function encodeMap(target, entries) {
-  const enc = new TextEncoder();
-  const sorted = Array.from(entries, ([k, v]) => [Array.from(k, c => c.codePointAt(0)), enc.encode(k), v]);
-  sorted.sort((a, b) => compareByteArrays(a[0], b[0]));
-  encodeTaggedInt(target, BigInt(sorted.length), CAL_TAG_MAP);
-  for (const [, keyBytes, val] of sorted) {
-    encodeVarInt(target, BigInt(keyBytes.length));
-    for (const b of keyBytes) target.push(b);
-    serializeValue(target, val);
-  }
-}
-
-function serializeValue(target, val) {
-  if (val === null || val === undefined) { target.push(CAL_NULL); return; }
-  if (val === true) { target.push(CAL_TRUE); return; }
-  if (val === false) { target.push(CAL_FALSE); return; }
-  
-  const valType = typeof val;
-  if (valType === "number") {
-    encodeInt(target, BigInt(val));
-    return;
-  }
-  if (valType === "bigint") {
-    encodeInt(target, val);
-    return;
-  }
-  if (valType === "string") {
-    const utf8 = new TextEncoder().encode(val);
-    encodeTaggedInt(target, BigInt(utf8.length), CAL_TAG_STR);
-    for (const b of utf8) target.push(b);
-    return;
-  }
-  if (Array.isArray(val)) {
-    encodeTaggedInt(target, BigInt(val.length), CAL_TAG_ARR);
-    for (const el of val) serializeValue(target, el);
-    return;
-  }
-  if (val instanceof Uint8Array) {
-    encodeTaggedInt(target, BigInt(val.length), CAL_TAG_BYTES);
-    for (const b of val) target.push(b);
-    return;
-  }
-  if (valType === "object") {
-    encodeMap(target, Object.entries(val));
-    return;
-  }
-  throw new Error(`Cannot serialize unsupported value: ${val}`);
-}
-
-function encodeCalldata(methodName, args = []) {
-  const target = [];
-  const methodBytes = new TextEncoder().encode(methodName);
-  encodeVarInt(target, BigInt(methodBytes.length));
-  for (const b of methodBytes) target.push(b);
-
-  encodeTaggedInt(target, BigInt(args.length), CAL_TAG_ARR);
-  for (const arg of args) serializeValue(target, arg);
-
-  encodeMap(target, []);
-  return "0x" + Array.from(target, b => b.toString(16).padStart(2, "0")).join("");
-}
-
-class ByteReader {
-  constructor(u8) {
-    this.buf = u8;
-    this.pos = 0;
-  }
-  get remaining() { return this.buf.length - this.pos; }
-  readByte() {
-    if (this.pos >= this.buf.length) throw new Error("Unexpected end of calldata buffer");
-    return this.buf[this.pos++];
-  }
-  readVarInt() {
-    let result = 0n, shift = 0n;
-    while (true) {
-      const byte = this.readByte();
-      result |= BigInt(byte & 0x7f) << shift;
-      if (!(byte & 0x80)) break;
-      shift += 7n;
-    }
-    return result;
-  }
-  readSlice(len) {
-    const end = this.pos + Number(len);
-    if (end > this.buf.length) throw new Error("Slice out of bounds in calldata buffer");
-    const sl = this.buf.subarray(this.pos, end);
-    this.pos = end;
-    return sl;
-  }
-}
-
-function deserializeValue(reader) {
-  const composite = reader.readVarInt();
-  const tag = Number(composite & 7n);
-  const val = composite >> 3n;
-
-  if (tag === 0) {
-    const code = Number(val);
-    if (code === 0) return null;
-    if (code === 1) return false;
-    if (code === 2) return true;
-    throw new Error(`Unknown calldata code: ${code}`);
-  }
-  if (tag === CAL_TAG_INT) return val;
-  if (tag === CAL_TAG_NEG) return -val - 1n;
-  if (tag === CAL_TAG_BYTES) return reader.readSlice(val);
-  if (tag === CAL_TAG_STR) return new TextDecoder().decode(reader.readSlice(val));
-  if (tag === CAL_TAG_ARR) {
-    const count = Number(val);
-    const arr = [];
-    for (let i = 0; i < count; i++) arr.push(deserializeValue(reader));
-    return arr;
-  }
-  if (tag === CAL_TAG_MAP) {
-    const count = Number(val);
-    const obj = {};
-    for (let i = 0; i < count; i++) {
-      const keyLen = reader.readVarInt();
-      const keyStr = new TextDecoder().decode(reader.readSlice(keyLen));
-      obj[keyStr] = deserializeValue(reader);
-    }
-    return obj;
-  }
-  throw new Error(`Unknown calldata tag: ${tag}`);
-}
-
-function decodeCalldataResult(hexStr) {
-  if (!hexStr || hexStr === "0x") return null;
-  const clean = hexStr.startsWith("0x") ? hexStr.slice(2) : hexStr;
-  const u8 = new Uint8Array(clean.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-  const reader = new ByteReader(u8);
-  return deserializeValue(reader);
-}
 
 // ============================================================================
 // Pure BigInt Currency Conversion (Zero Number / Math.round)
@@ -269,7 +157,7 @@ function parseGenToWei(genStr) {
   }
   const trimmed = genStr.trim();
   if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    throw new Error("Invalid GEN format. Use positive decimal (e.g. 1.5 or 10)");
+    throw new Error("Invalid GEN format. Use positive decimal (e.g. 0.05 or 1.5)");
   }
 
   const parts = trimmed.split(".");
@@ -318,28 +206,30 @@ function shortenAddress(addr) {
 }
 
 // ============================================================================
-// GenLayer Client & Direct JSON-RPC Integration
+// Client Initialization (Read Client & Write Client)
 // ============================================================================
-let genlayerModule = null;
-
-async function getGenLayerClient() {
-  if (state.client) return state.client;
-  try {
-    if (!genlayerModule) {
-      genlayerModule = await import("https://esm.sh/genlayer@0.18.0");
-    }
-    if (genlayerModule && typeof genlayerModule.createClient === "function") {
-      state.client = genlayerModule.createClient({
-        chain: STUDIONET_CHAIN
-      });
-      return state.client;
-    }
-  } catch (err) {
-    console.warn("Dynamic import of esm.sh/genlayer skipped or failed, using direct JSON-RPC:", err);
+function getReadClient() {
+  if (!state.readClient) {
+    state.readClient = createClient({
+      chain: studionet
+    });
   }
-  return null;
+  return state.readClient;
 }
 
+function getWriteClient() {
+  if (!state.injectedProvider || !state.walletAddress) {
+    return null;
+  }
+  state.client = createClient({
+    chain: studionet,
+    provider: state.injectedProvider,
+    account: state.walletAddress
+  });
+  return state.client;
+}
+
+// Direct JSON-RPC fallback for receipt polling if needed
 async function callDirectRpc(method, params) {
   const response = await fetch(RPC_ENDPOINT, {
     method: "POST",
@@ -363,83 +253,91 @@ async function callDirectRpc(method, params) {
   return json.result;
 }
 
-// Read Contract View Methods (Direct RPC or Client)
-async function callContractView(methodName, args = [], stateStatus = "ACCEPTED") {
-  const client = await getGenLayerClient();
-  if (client && client.readContract) {
-    try {
-      const res = await client.readContract({
-        address: CONTRACT_ADDRESS,
-        functionName: methodName,
-        args,
-        stateStatus
-      });
-      return res;
-    } catch (err) {
-      console.warn(`client.readContract for ${methodName} error, falling back to raw RPC:`, err);
-    }
-  }
-
-  // Direct RPC fallback
-  const calldata = encodeCalldata(methodName, args);
-  const rawHex = await callDirectRpc("gen_callViewMethod", [
-    CONTRACT_ADDRESS,
-    calldata,
-    stateStatus
-  ]);
-  return decodeCalldataResult(rawHex);
+// ============================================================================
+// Read Contract Functions (via state.client.readContract / getReadClient)
+// ============================================================================
+async function readWager(wagerId) {
+  const client = getReadClient();
+  const raw = await client.readContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "get_wager",
+    args: [String(wagerId)]
+  });
+  if (!raw) return null;
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
-// Read Wager Count
-async function fetchWagerCount() {
+async function readCanResolve(wagerId) {
+  const client = getReadClient();
   try {
-    const res = await callContractView("get_wager_count", [], "ACCEPTED");
-    return BigInt(res || 0n);
+    const raw = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: "can_resolve",
+      args: [String(wagerId)]
+    });
+    if (!raw) return { allowed: false, timeout_refund_allowed: false };
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
   } catch (err) {
-    console.error("fetchWagerCount error:", err);
+    console.warn("can_resolve read error:", err);
+    return { allowed: false, timeout_refund_allowed: false };
+  }
+}
+
+async function readWagerCount() {
+  const client = getReadClient();
+  try {
+    const raw = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: "get_wager_count",
+      args: []
+    });
+    return BigInt(raw || "0");
+  } catch (err) {
+    console.error("readWagerCount error:", err);
     return 0n;
   }
 }
 
-// Read Contract Total Reserved Stakes
-async function fetchReservedStakes() {
+async function readReservedStakes() {
+  const client = getReadClient();
   try {
-    const count = await fetchWagerCount();
+    const raw = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: "get_reserved_stakes",
+      args: []
+    });
+    return BigInt(raw || "0");
+  } catch (err) {
+    console.warn("get_reserved_stakes read error, tallying from wagers:", err);
+    const count = await readWagerCount();
     let totalWei = 0n;
-
     for (let i = 1n; i <= count; i++) {
       try {
-        const raw = await callContractView("get_wager", [i.toString()], "ACCEPTED");
-        const wager = typeof raw === "string" ? JSON.parse(raw) : raw;
+        const wager = await readWager(i.toString());
         if (wager) {
           const stakeWei = BigInt(wager.stake || "0");
-          if (wager.status === "OPEN") {
-            totalWei += stakeWei;
-          } else if (wager.status === "MATCHED") {
-            totalWei += stakeWei * 2n;
-          }
+          if (wager.status === "OPEN") totalWei += stakeWei;
+          else if (wager.status === "MATCHED") totalWei += stakeWei * 2n;
         }
-      } catch (err) {
-        console.warn(`Error reading wager #${i}:`, err);
-      }
+      } catch (e) {}
     }
     return totalWei;
-  } catch (err) {
-    console.error("fetchReservedStakes error:", err);
-    return 0n;
   }
 }
 
-// Refresh Top Bar Counters on Floor View
 async function refreshFloorCounters() {
   const countEl = document.getElementById("app-wager-count");
   const reservedEl = document.getElementById("app-reserved-stakes");
 
   try {
-    const count = await fetchWagerCount();
+    const count = await readWagerCount();
     if (countEl) countEl.textContent = count.toString();
 
-    const reservedWei = await fetchReservedStakes();
+    const reservedWei = await readReservedStakes();
     if (reservedEl) reservedEl.textContent = formatWeiToGen(reservedWei);
   } catch (err) {
     console.error("refreshFloorCounters error:", err);
@@ -521,6 +419,9 @@ async function connectWallet() {
       console.warn("Chain verification error:", netErr);
     }
 
+    // Bind write client
+    getWriteClient();
+
     updateWalletUI();
     showAlert(`Connected: ${shortenAddress(state.walletAddress)}`, "success");
   } catch (err) {
@@ -532,6 +433,7 @@ async function connectWallet() {
 function disconnectWallet() {
   state.walletAddress = null;
   state.injectedProvider = null;
+  state.client = null;
   localStorage.removeItem(STORAGE_KEYS.WALLET);
   updateWalletUI();
   showAlert("Wallet disconnected.", "info");
@@ -566,6 +468,7 @@ async function autoRestoreWallet() {
     if (accounts && accounts.length > 0 && accounts[0].toLowerCase() === saved.toLowerCase()) {
       state.injectedProvider = provider;
       state.walletAddress = accounts[0];
+      getWriteClient();
       updateWalletUI();
     }
   } catch (e) {
@@ -574,7 +477,7 @@ async function autoRestoreWallet() {
 }
 
 // ============================================================================
-// 7-Phase Write Flow Pipeline
+// 7-Phase Write Flow Pipeline & Transaction Polling
 // ============================================================================
 const WRITE_PHASES = [
   "signature",
@@ -607,6 +510,9 @@ function updateWriteFlowUI(phase, message, txHash = null) {
       hashWrap.innerHTML = `
         <a href="${EXPLORER_BASE}/tx/${txHash}" target="_blank" rel="noopener noreferrer" class="link-explorer">
           <span>TX: ${shortenAddress(txHash)}</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path>
+          </svg>
         </a>
       `;
     } else {
@@ -628,31 +534,81 @@ function updateWriteFlowUI(phase, message, txHash = null) {
   }
 }
 
-async function pollTransactionFinality(txHash) {
-  const maxAttempts = 60;
-  const intervalMs = 2000;
+async function pollReceiptWithPhases(client, txHash) {
+  updateWriteFlowUI("wait finalized", "Waiting for StudioNet finalization...", txHash);
+  
+  const retries = 40;
+  const interval = 3000;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const receipt = await callDirectRpc("gen_getTransactionReceipt", [txHash]);
-      if (receipt) {
-        const status = (receipt.status || receipt.stateStatus || "").toUpperCase();
-        if (status.includes("FINAL") || status === "FINALIZED" || status === "ACCEPTED" || status === "SUCCESS") {
-          return receipt;
+      let tx = null;
+      if (client && typeof client.getTransaction === "function") {
+        tx = await client.getTransaction({ hash: txHash });
+      } else {
+        tx = await callDirectRpc("gen_getTransaction", [txHash]);
+      }
+
+      if (tx) {
+        const rawStatus = tx.status;
+        const statusNum = Number(rawStatus);
+        const statusName = (tx.statusName || "").toUpperCase();
+        const consensus = (tx.consensus || tx.consensus_data || tx.consensusResult || "").toString();
+
+        console.log(`Polling tx ${txHash} [${attempt + 1}/${retries}]: status=${rawStatus} (${statusName}), consensus=${consensus}`);
+
+        // Only treat as cancel if status is 8 or statusName is CANCELED / REVERTED
+        if (statusNum === 8 || statusName === "CANCELED" || statusName === "CANCELLED" || statusName === "REVERTED") {
+          throw new Error("Transaction was cancelled or reverted on chain.");
+        }
+
+        // Phase 4: Consensus
+        if (statusName === "REVEALING" || statusName === "ACCEPTED" || consensus.toLowerCase().includes("accept") || statusNum >= 3) {
+          updateWriteFlowUI("consensus", "Validators reaching consensus...", txHash);
+        }
+
+        // Phase 5: Execution
+        if (statusName === "FINALIZING" || statusName === "FINALIZED" || statusNum >= 5) {
+          updateWriteFlowUI("execution", "Executing smart contract state transitions...", txHash);
+        }
+
+        // Success: status 7, statusName FINALIZED, or consensus Accepted
+        if (
+          statusNum === 7 ||
+          statusName === "FINALIZED" ||
+          (statusName === "ACCEPTED" && consensus.toLowerCase().includes("accept")) ||
+          (statusNum === 4 && consensus.toLowerCase().includes("accept"))
+        ) {
+          return tx;
         }
       }
     } catch (err) {
+      if (err.message && (err.message.includes("cancelled") || err.message.includes("reverted"))) {
+        throw err;
+      }
       console.warn(`Receipt polling attempt ${attempt + 1}:`, err);
     }
-    await new Promise(r => setTimeout(r, intervalMs));
+    await new Promise(r => setTimeout(r, interval));
   }
-  throw new Error("Transaction finality check timed out after 120s.");
+
+  // Exact timeout message requirement
+  throw new Error("Still waiting for finalization. The hash is above; refresh lookup.");
 }
 
-async function executeContractWrite(methodName, args = [], valueWei = 0n, promptTitle = "Submitting Transaction") {
+// ============================================================================
+// Contract Write Executor (Always writeContract, Never eth_sendTransaction Send)
+// ============================================================================
+async function executeContractWrite(methodName, args = [], valueWei = null, promptTitle = "Submitting Transaction") {
   if (!state.walletAddress || !state.injectedProvider) {
     showAlert("Please connect your wallet to execute this action.", "error");
     throw new Error("Wallet not connected");
+  }
+
+  // Bind the client to injected provider and connected account before every write
+  const client = getWriteClient();
+  if (!client || typeof client.writeContract !== "function") {
+    showAlert("Contract call client is not ready.", "error");
+    throw new Error("Contract call client is not ready.");
   }
 
   state.isWriteInFlight = true;
@@ -660,61 +616,73 @@ async function executeContractWrite(methodName, args = [], valueWei = 0n, prompt
   if (titleEl) titleEl.textContent = promptTitle;
 
   try {
-    // Phase 1: Signature
-    updateWriteFlowUI("signature", "Awaiting signature from your wallet...");
-    const calldata = encodeCalldata(methodName, args);
-    const valueHex = "0x" + valueWei.toString(16);
+    // Phase 1: signature
+    updateWriteFlowUI("signature", "Awaiting signature from connected wallet...");
 
-    const txParams = {
-      from: state.walletAddress,
-      to: CONTRACT_ADDRESS,
-      data: calldata,
-      value: valueHex
-    };
-
-    const txHash = await state.injectedProvider.request({
-      method: "eth_sendTransaction",
-      params: [txParams]
+    // Log the payload functionName before submit
+    console.log("Submitting contract write:", {
+      functionName: methodName,
+      args: args,
+      value: valueWei !== null ? valueWei.toString() : "nonpayable (no value)",
+      account: state.walletAddress,
+      address: CONTRACT_ADDRESS
     });
 
-    if (!txHash) throw new Error("Transaction rejected or no hash returned.");
+    const writeParams = {
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: methodName,
+      args: args,
+      account: state.walletAddress
+    };
 
-    // Phase 2: Submitted
+    // Payable methods: pass value as bigint. Nonpayable methods: do not set value.
+    if (valueWei !== null && valueWei > 0n) {
+      writeParams.value = valueWei;
+    }
+
+    const txHash = await client.writeContract(writeParams);
+    if (!txHash) {
+      throw new Error("No transaction hash returned from wallet.");
+    }
+
+    // Phase 2: submitted - show hash immediately and link to explorer
     updateWriteFlowUI("submitted", `Transaction submitted. Hash: ${txHash}`, txHash);
 
-    // Phase 3: Wait Finalized
-    updateWriteFlowUI("wait finalized", "Waiting for StudioNet block finality...", txHash);
-    await pollTransactionFinality(txHash);
+    // Phases 3 to 5: wait finalized -> consensus -> execution
+    await pollReceiptWithPhases(client, txHash);
 
-    // Phase 4: Consensus
-    updateWriteFlowUI("consensus", "Validators reaching consensus...", txHash);
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Phase 5: Execution
-    updateWriteFlowUI("execution", "Executing smart contract state transitions...", txHash);
-    await new Promise(r => setTimeout(r, 1000));
-
-    // Phase 6: Read
-    updateWriteFlowUI("read", "Reading back updated on-chain contract state...", txHash);
+    // Phase 6: read
+    updateWriteFlowUI("read", "Reading back updated on-chain contest state...", txHash);
     await refreshFloorCounters();
 
-    // Phase 7: Accepted
+    // Read back wager if applicable
+    let latestWager = null;
+    if (args.length > 0 && typeof args[0] === "string" && /^\d+$/.test(args[0])) {
+      try {
+        latestWager = await readWager(args[0]);
+      } catch (e) {
+        console.warn("Could not read wager back immediately:", e);
+      }
+    }
+
+    // Phase 7: accepted
     updateWriteFlowUI("accepted", "State accepted and finalized on StudioNet!", txHash);
     await new Promise(r => setTimeout(r, 2000));
 
     updateWriteFlowUI(null, "");
     state.isWriteInFlight = false;
-    return txHash;
+    return { txHash, wager: latestWager };
   } catch (err) {
     state.isWriteInFlight = false;
     updateWriteFlowUI(null, "");
-    showAlert(`Transaction failed: ${err.message || err}`, "error");
+    showAlert(err.message || String(err), "error");
     throw err;
   }
 }
 
 // ============================================================================
-// Form Validation & Field Helpers
+// Form Validation & UI Helpers
 // ============================================================================
 function validateDateString(dStr, fieldName = "Date") {
   if (!dStr || typeof dStr !== "string") {
@@ -822,7 +790,6 @@ function setView(viewName) {
   }
 }
 
-// Hook for external view change notifications
 window.onPalaestraViewChanged = function(viewName) {
   if (viewName === "floor") {
     autoRestoreWallet();
@@ -845,68 +812,6 @@ function setPanel(panelId) {
       btn.classList.remove("is-active");
     }
   });
-}
-
-// ============================================================================
-// Unified UI Initialization
-// ============================================================================
-function initUI() {
-  // #enter-floor button
-  const enterFloorBtn = document.getElementById("enter-floor");
-  if (enterFloorBtn) {
-    enterFloorBtn.onclick = () => setView("floor");
-  }
-
-  // #back-to-book button
-  const backToBookBtn = document.getElementById("back-to-book");
-  if (backToBookBtn) {
-    backToBookBtn.onclick = () => setView("book");
-  }
-
-  // Sidebar navigation panel buttons
-  const navBtns = document.querySelectorAll(".sidebar-nav .nav-btn");
-  navBtns.forEach(btn => {
-    btn.onclick = () => {
-      const targetId = btn.dataset.target;
-      if (targetId) setPanel(targetId);
-    };
-  });
-
-  // Wallet buttons
-  const connectBtn = document.getElementById("connect-wallet");
-  if (connectBtn) {
-    connectBtn.onclick = connectWallet;
-  }
-
-  const disconnectBtn = document.getElementById("disconnect-wallet");
-  if (disconnectBtn) {
-    disconnectBtn.onclick = disconnectWallet;
-  }
-
-  // Alert toast close button
-  const alertClose = document.getElementById("alert-close");
-  if (alertClose) {
-    alertClose.onclick = () => {
-      const alertEl = document.getElementById("floor-alert");
-      if (alertEl) alertEl.classList.add("is-hidden");
-    };
-  }
-
-  // Initialize Forms
-  initOpenForm();
-  initMatchForm();
-  initCancelForm();
-  initResolveForm();
-  initTimeoutForm();
-  initLookupForm();
-
-  // Restore initial view from localStorage
-  const savedView = localStorage.getItem(STORAGE_KEYS.VIEW);
-  if (savedView === "floor") {
-    setView("floor");
-  } else {
-    setView("book");
-  }
 }
 
 // ============================================================================
@@ -982,17 +887,17 @@ function initOpenForm() {
     }
 
     try {
-      const txHash = await executeContractWrite(
+      const result = await executeContractWrite(
         "create_wager",
         [question, eventDate, resolveAfter, side, sourceA, sourceB],
         stakeWei,
         "Opening New Contest"
       );
 
-      if (txHash) {
+      if (result && result.txHash) {
         form.reset();
         await refreshFloorCounters();
-        const count = await callContractView("get_wager_count");
+        const count = await readWagerCount();
         showAlert(`Contest opened successfully! ID: #${count}`, "success");
       }
     } catch (err) {
@@ -1018,12 +923,11 @@ function initMatchForm() {
       }
 
       try {
-        const raw = await callContractView("get_wager", [wagerId]);
-        if (!raw) {
+        const data = await readWager(wagerId);
+        if (!data) {
           showAlert(`Contest #${wagerId} not found.`, "error");
           return;
         }
-        const data = typeof raw === "string" ? JSON.parse(raw) : raw;
 
         const container = document.getElementById("match-preview-container");
         const statusEl = document.getElementById("match-preview-status");
@@ -1085,14 +989,14 @@ function initMatchForm() {
     }
 
     try {
-      const txHash = await executeContractWrite(
+      const result = await executeContractWrite(
         "join",
         [wagerId],
         stakeWei,
         `Matching Contest #${wagerId}`
       );
 
-      if (txHash) {
+      if (result && result.txHash) {
         form.reset();
         const previewBox = document.getElementById("match-preview-container");
         if (previewBox) previewBox.classList.add("is-hidden");
@@ -1123,14 +1027,14 @@ function initCancelForm() {
     }
 
     try {
-      const txHash = await executeContractWrite(
+      const result = await executeContractWrite(
         "cancel",
         [wagerId],
-        0n,
+        null, // nonpayable: do not set value
         `Cancelling Contest #${wagerId}`
       );
 
-      if (txHash) {
+      if (result && result.txHash) {
         form.reset();
         await refreshFloorCounters();
         showAlert(`Contest #${wagerId} has been cancelled and creator stake refunded.`, "success");
@@ -1159,17 +1063,16 @@ function initResolveForm() {
     }
 
     try {
-      const txHash = await executeContractWrite(
+      const writeResult = await executeContractWrite(
         "resolve",
         [wagerId],
-        0n,
+        null, // nonpayable: do not set value
         `Resolving Contest #${wagerId}`
       );
 
-      if (txHash) {
+      if (writeResult && writeResult.txHash) {
         form.reset();
-        const raw = await callContractView("get_wager", [wagerId], "ACCEPTED");
-        const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+        const data = await readWager(wagerId);
 
         const resBox = document.getElementById("resolve-result-box");
         const chipEl = document.getElementById("resolve-status-chip");
@@ -1178,24 +1081,26 @@ function initResolveForm() {
         const fundsEl = document.getElementById("resolve-res-funds");
         const noteEl = document.getElementById("resolve-res-note");
 
-        if (resBox) resBox.classList.remove("is-hidden");
-        if (chipEl) {
-          chipEl.textContent = data.status;
-          chipEl.className = `status-chip chip-${data.status.toLowerCase()}`;
-        }
-        if (statusEl) statusEl.textContent = data.status;
-        if (verdictEl) verdictEl.textContent = data.verdict || "—";
-        if (fundsEl) fundsEl.textContent = data.funds_disposition;
+        if (resBox && data) {
+          resBox.classList.remove("is-hidden");
+          if (chipEl) {
+            chipEl.textContent = data.status;
+            chipEl.className = `status-chip chip-${data.status.toLowerCase()}`;
+          }
+          if (statusEl) statusEl.textContent = data.status;
+          if (verdictEl) verdictEl.textContent = data.verdict || "—";
+          if (fundsEl) fundsEl.textContent = data.funds_disposition;
 
-        if (noteEl) {
-          if (data.status === "SETTLED") {
-            noteEl.textContent = `Contest settled with verdict: ${data.verdict}. Pot paid to winner.`;
-          } else {
-            noteEl.textContent = `Consensus was ${data.verdict || "UNKNOWN"}. The contest remains MATCHED. Stakes may be returned via timeout after refund_after.`;
+          if (noteEl) {
+            if (data.status === "SETTLED") {
+              noteEl.textContent = `Contest settled with verdict: ${data.verdict}. Pot paid to winner.`;
+            } else {
+              noteEl.textContent = `Consensus was ${data.verdict || "UNKNOWN"}. The contest remains MATCHED. Stakes may be returned via timeout after refund_after.`;
+            }
           }
         }
 
-        showAlert(`Contest #${wagerId} adjudicated: ${data.status}`, "success");
+        showAlert(`Contest #${wagerId} adjudicated: ${data ? data.status : "FINALIZED"}`, "success");
       }
     } catch (err) {
       console.error("Error resolving wager:", err);
@@ -1221,14 +1126,14 @@ function initTimeoutForm() {
     }
 
     try {
-      const txHash = await executeContractWrite(
+      const result = await executeContractWrite(
         "timeout_refund",
         [wagerId],
-        0n,
+        null, // nonpayable: do not set value
         `Returning Both Stakes for Contest #${wagerId}`
       );
 
-      if (txHash) {
+      if (result && result.txHash) {
         form.reset();
         await refreshFloorCounters();
         showAlert(`Both stakes for Contest #${wagerId} have been refunded.`, "success");
@@ -1239,7 +1144,7 @@ function initTimeoutForm() {
   });
 }
 
-// Form 06: #lookup-form (get_wager & can_resolve)
+// Form 06: #lookup-form (get_wager & can_resolve via readContract)
 function initLookupForm() {
   const form = document.getElementById("lookup-form");
   if (!form) return;
@@ -1257,24 +1162,13 @@ function initLookupForm() {
     }
 
     try {
-      const rawWager = await callContractView("get_wager", [wagerId], "ACCEPTED");
-      if (!rawWager) {
+      const wagerData = await readWager(wagerId);
+      if (!wagerData) {
         showAlert(`Contest #${wagerId} does not exist.`, "error");
         return;
       }
 
-      const wagerData = typeof rawWager === "string" ? JSON.parse(rawWager) : rawWager;
-      let canData = { allowed: false, timeout_refund_allowed: false };
-
-      try {
-        const rawCan = await callContractView("can_resolve", [wagerId], "ACCEPTED");
-        if (rawCan) {
-          canData = typeof rawCan === "string" ? JSON.parse(rawCan) : rawCan;
-        }
-      } catch (err) {
-        console.warn("can_resolve check failed:", err);
-      }
-
+      const canData = await readCanResolve(wagerId);
       renderLookupTicket(wagerId, wagerData, canData);
       showAlert(`Loaded Contest #${wagerId} details.`, "success");
     } catch (err) {
@@ -1297,7 +1191,7 @@ function renderLookupTicket(wagerId, wager, can) {
   const statusEl = document.getElementById("lookup-display-status");
 
   if (idEl) idEl.textContent = `CONTEST #${wagerId}`;
-  if (nowEl) nowEl.textContent = `UTC NOW: ${can.current_date || new Date().toISOString().slice(0, 10)}`;
+  if (nowEl) nowEl.textContent = `UTC NOW: ${can.now_utc || new Date().toISOString().slice(0, 10)}`;
   if (statusEl) {
     statusEl.textContent = wager.status;
     statusEl.className = `status-chip chip-${wager.status.toLowerCase()} font-mono`;
@@ -1313,7 +1207,7 @@ function renderLookupTicket(wagerId, wager, can) {
 
   if (qEl) qEl.textContent = `"${wager.question}"`;
   if (creatorEl) creatorEl.textContent = shortenAddress(wager.creator);
-  if (joinerEl) joinerEl.textContent = wager.joiner ? shortenAddress(wager.joiner) : "(none / open)";
+  if (joinerEl) joinerEl.textContent = (wager.joiner && wager.joiner !== "0x0000000000000000000000000000000000000000") ? shortenAddress(wager.joiner) : "(none / open)";
   if (eventDateEl) eventDateEl.textContent = wager.event_date;
   if (resolveAfterEl) resolveAfterEl.textContent = wager.resolve_after;
   if (refundAfterEl) refundAfterEl.textContent = wager.refund_after;
@@ -1424,8 +1318,49 @@ function renderLookupTicket(wagerId, wager, can) {
 }
 
 // ============================================================================
-// Immediate DOM & EIP-6963 Ready Initialization
+// Initialization
 // ============================================================================
+function initUI() {
+  // Wallet buttons
+  const connectBtn = document.getElementById("connect-wallet");
+  if (connectBtn) {
+    connectBtn.onclick = connectWallet;
+  }
+
+  const disconnectBtn = document.getElementById("disconnect-wallet");
+  if (disconnectBtn) {
+    disconnectBtn.onclick = disconnectWallet;
+  }
+
+  // Alert toast close button
+  const alertClose = document.getElementById("alert-close");
+  if (alertClose) {
+    alertClose.onclick = () => {
+      const alertEl = document.getElementById("floor-alert");
+      if (alertEl) alertEl.classList.add("is-hidden");
+    };
+  }
+
+  // Initialize Forms
+  initOpenForm();
+  initMatchForm();
+  initCancelForm();
+  initResolveForm();
+  initTimeoutForm();
+  initLookupForm();
+
+  // Restore initial view & wallet
+  const savedView = localStorage.getItem(STORAGE_KEYS.VIEW);
+  if (savedView === "floor") {
+    setView("floor");
+  } else {
+    setView("book");
+  }
+
+  autoRestoreWallet();
+  refreshFloorCounters();
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     initEip6963();
