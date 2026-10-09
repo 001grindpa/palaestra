@@ -1,6 +1,12 @@
-CONTRACT = "contracts/Palaestra.py"
+CONTRACT = "src/Palaestra.py"
 URL_A = "https://www.bbc.com/sport"
 URL_B = "https://www.reuters.com/sports/"
+
+
+def _set_today(day: str) -> None:
+    import contracts.Palaestra as mod
+
+    mod._today_utc = lambda: day
 
 
 def _open(contract, vm, creator, resolve_after="2026-12-31"):
@@ -87,7 +93,7 @@ def test_early_resolve_and_timeout_blocked(
 
     with direct_vm.expect_revert("wager cannot be closed before resolve_after"):
         contract.resolve(wager_id)
-    with direct_vm.expect_revert("timeout_refund cannot run before refund_after"):
+    with direct_vm.expect_revert("timeout_refund requires a recorded UNKNOWN or DISAGREE"):
         contract.timeout_refund(wager_id)
 
     after = contract.get_wager(wager_id)
@@ -100,11 +106,12 @@ def test_refund_not_open_when_resolve_first_opens(
     direct_vm, direct_deploy, direct_alice, direct_bob
 ):
     contract = direct_deploy(CONTRACT)
+    _set_today("2026-10-09")
     direct_vm.sender = direct_alice
     wager_id = contract.create_wager(
-        "Did team X win on 2026-10-03?",
-        "2026-10-03",
-        "2026-10-03",
+        "Did team X win on 2026-10-09?",
+        "2026-10-09",
+        "2026-10-09",
         "NO",
         URL_A,
         URL_B,
@@ -112,34 +119,102 @@ def test_refund_not_open_when_resolve_first_opens(
     )
     direct_vm.sender = direct_bob
     contract.join(wager_id, value=10**18)
+
+    def unknown(_wager):
+        return {"verdict": "UNKNOWN"}
+
+    contract._adjudicate = unknown
+    contract.resolve(wager_id)
     raw = contract.get_wager(wager_id)
-    assert "2026-10-03" in raw
-    assert "2026-10-04" in raw
+    assert "2026-10-09" in raw
+    assert "2026-10-10" in raw
+    assert "UNKNOWN" in raw
     with direct_vm.expect_revert("timeout_refund cannot run before refund_after"):
         contract.timeout_refund(wager_id)
     assert "MATCHED" in contract.get_wager(wager_id)
 
 
-def test_timeout_refunds_both_once(direct_vm, direct_deploy, direct_alice, direct_bob):
+def test_timeout_without_adjudication_does_not_pay(
+    direct_vm, direct_deploy, direct_alice, direct_bob
+):
     contract = direct_deploy(CONTRACT)
     wager_id = _matched(
         contract, direct_vm, direct_alice, direct_bob, resolve_after="2020-01-01"
     )
-    assert "2020-01-02" in contract.get_wager(wager_id)
-    contract.timeout_refund(wager_id)
+    with direct_vm.expect_revert("timeout_refund requires a recorded UNKNOWN or DISAGREE"):
+        contract.timeout_refund(wager_id)
     after = contract.get_wager(wager_id)
-    assert "REFUNDED" in after
-    assert "TIMEOUT" in after
-    assert "REFUNDED_TO_BOTH" in after
+    assert "MATCHED" in after
+    assert "REFUNDED" not in after
+    assert contract.get_reserved_stakes() == str(2 * 10**18)
+
+
+def test_resolve_closed_after_refund_deadline(
+    direct_vm, direct_deploy, direct_alice, direct_bob
+):
+    contract = direct_deploy(CONTRACT)
+    wager_id = _matched(
+        contract, direct_vm, direct_alice, direct_bob, resolve_after="2020-01-01"
+    )
+    with direct_vm.expect_revert("resolve is closed"):
+        contract.resolve(wager_id)
+    after = contract.get_wager(wager_id)
+    assert "MATCHED" in after
+    assert "SETTLED" not in after
+    assert "REFUNDED" not in after
+
+
+def test_yes_pays_creator_once(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy(CONTRACT)
+    _set_today("2026-10-09")
+    wager_id = _matched(
+        contract, direct_vm, direct_alice, direct_bob, resolve_after="2026-10-09"
+    )
+
+    def yes(_wager):
+        return {"verdict": "YES"}
+
+    contract._adjudicate = yes
+    contract.resolve(wager_id)
+    after = contract.get_wager(wager_id)
+    assert "SETTLED" in after
+    assert "YES" in after
+    assert "PAID_TO_WINNER" in after
+    assert contract.get_reserved_stakes() == "0"
+    with direct_vm.expect_revert("wager must be MATCHED to resolve"):
+        contract.resolve(wager_id)
+    with direct_vm.expect_revert("only a matched wager can be timeout-refunded"):
+        contract.timeout_refund(wager_id)
+
+
+def test_no_pays_joiner_once(direct_vm, direct_deploy, direct_alice, direct_bob):
+    contract = direct_deploy(CONTRACT)
+    _set_today("2026-10-09")
+    wager_id = _matched(
+        contract, direct_vm, direct_alice, direct_bob, resolve_after="2026-10-09"
+    )
+
+    def no(_wager):
+        return {"verdict": "NO"}
+
+    contract._adjudicate = no
+    contract.resolve(wager_id)
+    after = contract.get_wager(wager_id)
+    assert "SETTLED" in after
+    assert "NO" in after
+    assert "PAID_TO_WINNER" in after
     assert contract.get_reserved_stakes() == "0"
     with direct_vm.expect_revert("only a matched wager can be timeout-refunded"):
         contract.timeout_refund(wager_id)
 
 
-def test_unknown_does_not_pay(direct_vm, direct_deploy, direct_alice, direct_bob):
+def test_resolve_then_timeout_refund_on_same_wager(
+    direct_vm, direct_deploy, direct_alice, direct_bob
+):
     contract = direct_deploy(CONTRACT)
+    _set_today("2026-10-09")
     wager_id = _matched(
-        contract, direct_vm, direct_alice, direct_bob, resolve_after="2020-01-01"
+        contract, direct_vm, direct_alice, direct_bob, resolve_after="2026-10-09"
     )
 
     def unknown(_wager):
@@ -147,8 +222,41 @@ def test_unknown_does_not_pay(direct_vm, direct_deploy, direct_alice, direct_bob
 
     contract._adjudicate = unknown
     contract.resolve(wager_id)
+    assert "UNKNOWN" in contract.get_wager(wager_id)
+
+    with direct_vm.expect_revert("timeout_refund cannot run before refund_after"):
+        contract.timeout_refund(wager_id)
+
+    _set_today("2026-10-10")
+    contract.timeout_refund(wager_id)
+    after = contract.get_wager(wager_id)
+    assert "REFUNDED" in after
+    assert "TIMEOUT" in after
+    assert "REFUNDED_TO_BOTH" in after
+    assert contract.get_reserved_stakes() == "0"
+
+    with direct_vm.expect_revert("wager must be MATCHED to resolve"):
+        contract.resolve(wager_id)
+    with direct_vm.expect_revert("only a matched wager can be timeout-refunded"):
+        contract.timeout_refund(wager_id)
+
+
+def test_timeout_refund_then_resolve_on_same_wager(
+    direct_vm, direct_deploy, direct_alice, direct_bob
+):
+    contract = direct_deploy(CONTRACT)
+    _set_today("2026-10-10")
+    wager_id = _matched(
+        contract, direct_vm, direct_alice, direct_bob, resolve_after="2026-10-09"
+    )
+
+    with direct_vm.expect_revert("timeout_refund requires a recorded UNKNOWN or DISAGREE"):
+        contract.timeout_refund(wager_id)
+    with direct_vm.expect_revert("resolve is closed"):
+        contract.resolve(wager_id)
+
     after = contract.get_wager(wager_id)
     assert "MATCHED" in after
-    assert "UNKNOWN" in after
+    assert "REFUNDED" not in after
     assert "SETTLED" not in after
-    assert "PAID_TO_WINNER" not in after
+    assert contract.get_reserved_stakes() == str(2 * 10**18)

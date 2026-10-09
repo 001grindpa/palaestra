@@ -17,6 +17,7 @@ const {
   validatePair,
   ensureWalletReady,
   executeWriteFlow,
+  readWager,
 } = app;
 
 if (!state) {
@@ -30,6 +31,7 @@ describe("Palaestra", () => {
     state.chainId = null;
     state.inFlight = false;
     state.client = null;
+    state.readClient = null;
   });
 
   it("parses stake with bigint only", () => {
@@ -76,5 +78,18 @@ describe("Palaestra", () => {
     const out = await executeWriteFlow("join", ["1"], 50000000000000000n, async () => {});
     assert.equal(out, hash);
     assert.equal(ABI.find((item) => item.name === "timeout_refund").inputs.length, 1);
+  });
+
+  it("uses a defined account in lookup read payloads", async () => {
+    let lookupPayload;
+    state.readClient = {
+      readContract: async (payload) => {
+        lookupPayload = payload;
+        return JSON.stringify({ status: "MATCHED" });
+      },
+    };
+
+    await readWager("1");
+    assert.equal(lookupPayload.account?.address, "0x0000000000000000000000000000000000000000");
   });
 });

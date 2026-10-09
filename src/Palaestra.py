@@ -155,8 +155,14 @@ class EventWager(gl.Contract):
             raise gl.vm.UserError(
                 "wager cannot be closed before resolve_after " + wager.resolve_after
             )
+        if today >= wager.refund_after:
+            raise gl.vm.UserError(
+                "resolve is closed; use timeout_refund after a recorded disagreement"
+            )
 
     def _ensure_refundable(self, wager: Wager) -> None:
+        if wager.verdict not in ("UNKNOWN", "DISAGREE"):
+            raise gl.vm.UserError("timeout_refund requires a recorded UNKNOWN or DISAGREE")
         today = _today_utc()
         if today < wager.refund_after:
             raise gl.vm.UserError(
@@ -391,15 +397,17 @@ Return JSON only with exactly these fields:
         wager = self._get(wager_id)
         today = _today_utc()
         matched = wager.status == "MATCHED"
+        recorded = wager.verdict in ("UNKNOWN", "DISAGREE")
         return json.dumps(
             {
                 "status": wager.status,
                 "event_date": wager.event_date,
                 "resolve_after": wager.resolve_after,
                 "refund_after": wager.refund_after,
+                "verdict": wager.verdict,
                 "now_utc": today,
-                "allowed": matched and today >= wager.resolve_after,
-                "timeout_refund_allowed": matched and today >= wager.refund_after,
+                "allowed": matched and today >= wager.resolve_after and today < wager.refund_after,
+                "timeout_refund_allowed": matched and recorded and today >= wager.refund_after,
             },
             sort_keys=True,
         )

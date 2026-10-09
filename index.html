@@ -90,8 +90,8 @@
               <span class="network-badge font-mono">Chain ID 61999 (0xf22f)</span>
             </div>
             <div class="contract-address-box">
-              <span class="font-mono contract-addr" id="landing-contract-address">0x05Ea4308905A80354515B991a35f1BE09186eB1C</span>
-              <a href="https://explorer-studio.genlayer.com/address/0x05Ea4308905A80354515B991a35f1BE09186eB1C" target="_blank" rel="noopener noreferrer" class="link-explorer" title="View on StudioNet Explorer">
+              <span class="font-mono contract-addr" id="landing-contract-address">0x49b22b57B0721dc1c42f07120512Dfd74D6F6435</span>
+              <a href="https://explorer-studio.genlayer.com/address/0x49b22b57B0721dc1c42f07120512Dfd74D6F6435" target="_blank" rel="noopener noreferrer" class="link-explorer" title="View on StudioNet Explorer">
                 <span>Explorer</span>
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path>
@@ -207,7 +207,7 @@
           <div class="feature-card">
             <div class="feature-num font-serif">III</div>
             <h3 class="feature-title font-serif">Dual-Source Settlement</h3>
-            <p class="feature-desc">On or after resolve_after, validators examine both source pages. If both agree, the winner receives the pot. If inconclusive, timeout refunds open the next day.</p>
+            <p class="feature-desc">Resolve is open from resolve_after through the day before refund_after. YES or NO pays the pot to the winning wallet; UNKNOWN or DISAGREE stays MATCHED until a recorded verdict can be returned after refund_after.</p>
           </div>
         </div>
 
@@ -676,7 +676,7 @@
               <!-- Settle (Resolve) Form -->
               <div class="panel-card main-form-card">
                 <h3 class="card-heading font-serif">Settle Contest</h3>
-                <p class="card-subtext">MATCHED only, on or after <code>resolve_after</code>.</p>
+                <p class="card-subtext">MATCHED only, from <code>resolve_after</code> through the day before <code>refund_after</code>.</p>
 
                 <form id="resolve-form" class="matchbook-form" novalidate>
                   <div class="form-group">
@@ -736,7 +736,7 @@
 
                   <!-- Required Exact Helper Text -->
                   <p class="helper-text-highlight">
-                    Opens the UTC day after resolve after, and only while the match is still open.
+                    Opens the UTC day after resolve_after, and only after Resolve has recorded UNKNOWN or DISAGREE.
                   </p>
 
                   <div class="form-actions">
@@ -752,7 +752,7 @@
 
                 <div class="info-notice">
                   <span class="notice-dot"></span>
-                  <span>YES or NO settles the pot to that side. UNKNOWN and DISAGREE stay MATCHED. timeout_refund is the only path that returns both stakes, and it is not callable on the day resolve first opens.</span>
+                  <span>A YES or NO verdict settles the contest as SETTLED with PAID_TO_WINNER: the creator wins when creator_side matches the verdict; otherwise the joiner wins. UNKNOWN or DISAGREE stays MATCHED. A matched contest with an empty verdict cannot be returned. A return settles as REFUNDED with TIMEOUT and REFUNDED_TO_BOTH. Once SETTLED or REFUNDED, both actions stay closed and a second call reverts.</span>
                 </div>
               </div>
             </div>
@@ -921,7 +921,7 @@
           <span class="footer-desc">Two-sided dated contest match book on GenLayer StudioNet.</span>
         </div>
         <div class="footer-right">
-          <span class="footer-contract font-mono">0x05Ea4308905A80354515B991a35f1BE09186eB1C</span>
+          <span class="footer-contract font-mono">0x49b22b57B0721dc1c42f07120512Dfd74D6F6435</span>
         </div>
       </div>
     </footer>

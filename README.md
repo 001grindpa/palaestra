@@ -16,24 +16,22 @@ Two counterparties take opposing positions on an unambiguous calendar-dated prop
 - **Chain ID**: `61999` (`0xf22f`)
 - **RPC Endpoint**: `https://studio.genlayer.com/api`
 - **Block Explorer**: `https://explorer-studio.genlayer.com`
-- **Contract Address**: `0x05Ea4308905A80354515B991a35f1BE09186eB1C`
+- **Contract Address**: `0x49b22b57B0721dc1c42f07120512Dfd74D6F6435`
 
 ---
 
-## Live Floor
+## Live contests
 
-Explorer: https://explorer-studio.genlayer.com/address/0x05Ea4308905A80354515B991a35f1BE09186eB1C
+Explorer: https://explorer-studio.genlayer.com/address/0x49b22b57B0721dc1c42f07120512Dfd74D6F6435
 
-### Match 1, returned to both sides
-- post `0x72f0cc1c83af5e5a1e1a1e81c8bf38f1b672e5ed0ba509b79d99afcb8ea491a2`
-- match `0x233bbfb4afacb30df6a31ea3cd682debba67715c8565114472c269855f78803c`
-- return both stakes `0x7e08a9ff449185b480e15e88e093a1f4b38760dab5fae6f327823ad3abd5bf04`
-- id 1, expected `REFUNDED` / `TIMEOUT` / `REFUNDED_TO_BOTH`
+### Contest 3
 
-### Match 2, cancelled before a joiner
-- post `0x0220ecc31ae125afeb8df87e83dfe952b745048dfe8e7f3674c4321bcc9a7539`
-- cancel `0xe2b053ef3986cad55ed375c64af00064285a14e40141ac263bf7945915359d35`
-- id 2, expected `CANCELLED` / `REFUNDED_TO_CREATOR`
+`SETTLED` / `YES` / `PAID_TO_WINNER`. The pot went to the creator.
+
+- `create_wager`: `0xea6f2c99cff8593bca15454d043bfb99f19f72708cfda334f1def4f1f16eb03e`
+- `join`: `0x9344ab61e9bd2c5b6e51ba33a43efb4718849665493641d35aac52ef8d1ed4df`
+- `resolve`: `0x5b51272e432549804b0b0ab6331423043c8a147bf0bbfc36b42e4004d5771183`
+- `winner transfer`: `0xeb8bcb703bcf9bbe9b3bf0c398c7d95efc59efcff6772bead429ef9faa52a222`
 
 ---
 
@@ -68,17 +66,19 @@ Palaestra operates through five state-modifying actions and four view methods.
 ### 4. `resolve(wager_id)`
 - **Parameters**:
   - `wager_id`: Contest ID of a `MATCHED` contest.
-- **Availability**: Callable on or after `resolve_after`.
+- **Availability**: Open from `resolve_after` through the UTC day before `refund_after`.
 - **Consensus**: GenLayer validators inspect both public URLs:
-  - If both sources independently confirm `YES` or `NO`, the contest status transitions to `SETTLED` and the entire pot is disbursed to the winning address.
-  - If the sources return `UNKNOWN` or `DISAGREE`, the contest remains `MATCHED`.
+  - A `YES` or `NO` verdict settles the contest as `SETTLED` with funds disposition `PAID_TO_WINNER`. The creator wins when `creator_side` matches the verdict; otherwise, the joiner wins.
+  - If the verdict is `UNKNOWN` or `DISAGREE`, the contest remains `MATCHED`.
 - **Returns**: Updated status string (`SETTLED` or `MATCHED`).
 
 ### 5. `timeout_refund(wager_id)`
 - **Parameters**:
   - `wager_id`: Contest ID of a `MATCHED` contest.
-- **Availability**: Callable on or after `refund_after` (one UTC day after `resolve_after`), provided the contest remains `MATCHED`.
-- **State Transition**: Changes status to `REFUNDED`, sets funds disposition to `REFUNDED_TO_BOTH`, and returns both individual stakes to creator and joiner wallets.
+- **Availability**: Callable on or after `refund_after` (one UTC day after `resolve_after`), provided the contest remains `MATCHED` and `resolve` has recorded `UNKNOWN` or `DISAGREE`. A matched contest with an empty verdict cannot be returned.
+- **State Transition**: Changes status to `REFUNDED`, records verdict `TIMEOUT`, sets funds disposition to `REFUNDED_TO_BOTH`, and returns both individual stakes to creator and joiner wallets.
+
+After a contest reaches `SETTLED` or `REFUNDED`, both actions are closed; a second call reverts.
 
 ### View Methods
 - `get_wager(wager_id)`: Returns full JSON record of creator, joiner, question, event date, resolve date, refund date, creator side, both source URLs, stake (in wei), status, verdict, and funds disposition.

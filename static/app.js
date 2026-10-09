@@ -28,7 +28,7 @@ async function loadSdk() {
 // ============================================================================
 // Constants & Configuration
 // ============================================================================
-const CONTRACT_ADDRESS = "0x05Ea4308905A80354515B991a35f1BE09186eB1C";
+const CONTRACT_ADDRESS = "0x49b22b57B0721dc1c42f07120512Dfd74D6F6435";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 export const CHAIN_ID = 61999;
 const CHAIN_ID_HEX = "0xf22f";
@@ -233,7 +233,7 @@ function shortenAddress(addr) {
 }
 
 function getReadAccount() {
-  return { address: isValidAddress(state.walletAddress) ? state.walletAddress : ZERO_ADDRESS };
+  return { address: ZERO_ADDRESS };
 }
 
 // ============================================================================
@@ -276,7 +276,7 @@ async function callDirectRpc(method, params) {
 // ============================================================================
 // Read Contract Functions (via state.client.readContract / getReadClient)
 // ============================================================================
-async function readWager(wagerId) {
+export async function readWager(wagerId) {
   const client = await getReadClient();
   const raw = await client.readContract({
     account: getReadAccount(),
@@ -291,20 +291,15 @@ async function readWager(wagerId) {
 
 async function readCanResolve(wagerId) {
   const client = await getReadClient();
-  try {
-    const raw = await client.readContract({
-      account: getReadAccount(),
-      address: CONTRACT_ADDRESS,
-      abi: CONTRACT_ABI,
-      functionName: "can_resolve",
-      args: [String(wagerId)]
-    });
-    if (!raw) return { allowed: false, timeout_refund_allowed: false };
-    return typeof raw === "string" ? JSON.parse(raw) : raw;
-  } catch (err) {
-    console.warn("can_resolve read error:", err);
-    return { allowed: false, timeout_refund_allowed: false };
-  }
+  const raw = await client.readContract({
+    account: getReadAccount(),
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "can_resolve",
+    args: [String(wagerId)]
+  });
+  if (!raw) throw new Error(`can_resolve returned no data for contest #${wagerId}.`);
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
 async function readWagerCount() {
@@ -605,13 +600,8 @@ async function pollReceiptWithPhases(client, txHash) {
           updateWriteFlowUI("execution", "Executing smart contract state transitions...", txHash);
         }
 
-        // Success: status 7, statusName FINALIZED, or consensus Accepted
-        if (
-          statusNum === 7 ||
-          statusName === "FINALIZED" ||
-          (statusName === "ACCEPTED" && consensus.toLowerCase().includes("accept")) ||
-          (statusNum === 4 && consensus.toLowerCase().includes("accept"))
-        ) {
+        // StudioNet status 7 is FINALIZED; consensus acceptance alone is not finalization.
+        if (statusNum === 7 || statusName === "FINALIZED") {
           return tx;
         }
       }
@@ -734,14 +724,23 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
     updateWriteFlowUI("read", "Reading back updated on-chain contest state...", txHash);
     await refreshFloorCounters();
 
-    // Read back wager if applicable
+    // Read back both records after finalization for every write tied to a wager.
+    let wagerId = null;
+    if (methodName === "create_wager") {
+      wagerId = (await readWagerCount()).toString();
+    } else if (args.length > 0 && typeof args[0] === "string" && /^\d+$/.test(args[0])) {
+      wagerId = args[0];
+    }
+
     let latestWager = null;
-    if (args.length > 0 && typeof args[0] === "string" && /^\d+$/.test(args[0])) {
-      try {
-        latestWager = await readWager(args[0]);
-      } catch (e) {
-        console.warn("Could not read wager back immediately:", e);
+    let latestCanResolve = null;
+    if (wagerId !== null) {
+      latestWager = await readWager(wagerId);
+      if (!latestWager) {
+        throw new Error(`Contest #${wagerId} was not found after the finalized write.`);
       }
+      latestCanResolve = await readCanResolve(wagerId);
+      renderLookupTicket(wagerId, latestWager, latestCanResolve);
     }
 
     // Phase 7: accepted
@@ -750,7 +749,7 @@ async function executeContractWrite(methodName, args = [], valueWei = null, prom
 
     updateWriteFlowUI(null, "");
     state.inFlight = false;
-    return { txHash, wager: latestWager };
+    return { txHash, wagerId, wager: latestWager, canResolve: latestCanResolve };
   } catch (err) {
     state.inFlight = false;
     updateWriteFlowUI(null, "");
@@ -1227,7 +1226,7 @@ function initResolveForm() {
 
       if (writeResult && writeResult.txHash) {
         form.reset();
-        const data = await readWager(wagerId);
+        const data = writeResult.wager;
 
         const resBox = document.getElementById("resolve-result-box");
         const chipEl = document.getElementById("resolve-status-chip");
@@ -1247,10 +1246,13 @@ function initResolveForm() {
           if (fundsEl) fundsEl.textContent = data.funds_disposition;
 
           if (noteEl) {
+            const reservedStakes = document.getElementById("app-reserved-stakes")?.textContent || "— GEN";
+            const readbackFlags = ` Reserved stakes: ${reservedStakes}; allowed: ${writeResult.canResolve?.allowed ? "YES" : "NO"}; timeout_refund_allowed: ${writeResult.canResolve?.timeout_refund_allowed ? "YES" : "NO"}.`;
             if (data.status === "SETTLED") {
-              noteEl.textContent = `Contest settled with verdict: ${data.verdict}. Pot paid to winner.`;
+              const winner = data.creator_side === data.verdict ? "Creator" : "Joiner";
+              noteEl.textContent = `${data.status} / ${data.verdict} / ${data.funds_disposition}. ${winner} wallet received the pot.${readbackFlags}`;
             } else {
-              noteEl.textContent = `Consensus was ${data.verdict || "UNKNOWN"}. The contest remains MATCHED. Stakes may be returned via timeout after refund_after.`;
+              noteEl.textContent = `${data.status} / ${data.verdict || "UNKNOWN"} / ${data.funds_disposition}. The contest remains MATCHED.${readbackFlags}`;
             }
           }
         }
@@ -1295,8 +1297,13 @@ function initTimeoutForm() {
 
       if (result && result.txHash) {
         form.reset();
-        await refreshFloorCounters();
-        showAlert(`Both stakes for Contest #${wagerId} have been refunded.`, "success");
+        const reservedStakes = document.getElementById("app-reserved-stakes")?.textContent || "— GEN";
+        const wager = result.wager;
+        const can = result.canResolve;
+        showAlert(
+          `Contest #${wagerId} readback: ${wager.status} / ${wager.verdict} / ${wager.funds_disposition}. Reserved stakes: ${reservedStakes}; allowed: ${can.allowed ? "YES" : "NO"}; timeout_refund_allowed: ${can.timeout_refund_allowed ? "YES" : "NO"}.`,
+          "success"
+        );
       }
     } catch (err) {
       console.error("Error with timeout refund:", err);
