@@ -161,13 +161,14 @@ class EventWager(gl.Contract):
             )
 
     def _ensure_refundable(self, wager: Wager) -> None:
-        if wager.verdict not in ("UNKNOWN", "DISAGREE"):
-            raise gl.vm.UserError("timeout_refund requires a recorded UNKNOWN or DISAGREE")
         today = _today_utc()
         if today < wager.refund_after:
             raise gl.vm.UserError(
                 "timeout_refund cannot run before refund_after " + wager.refund_after
             )
+        if wager.verdict in ("UNKNOWN", "DISAGREE", ""):
+            return
+        raise gl.vm.UserError("timeout_refund requires an unresolved or inconclusive wager")
 
     def _refund_both(self, wager_id: str, wager: Wager, verdict: str) -> None:
         pot = wager.stake + wager.stake
@@ -390,14 +391,15 @@ Return JSON only with exactly these fields:
         if wager.joiner == ZERO:
             raise gl.vm.UserError("wager is not matched")
         self._ensure_refundable(wager)
-        self._refund_both(wager_id, wager, "TIMEOUT")
+        expired = wager.verdict == ""
+        self._refund_both(wager_id, wager, "EXPIRED" if expired else "TIMEOUT")
 
     @gl.public.view
     def can_resolve(self, wager_id: str) -> str:
         wager = self._get(wager_id)
         today = _today_utc()
         matched = wager.status == "MATCHED"
-        recorded = wager.verdict in ("UNKNOWN", "DISAGREE")
+        recoverable = wager.verdict in ("UNKNOWN", "DISAGREE", "")
         return json.dumps(
             {
                 "status": wager.status,
@@ -407,7 +409,7 @@ Return JSON only with exactly these fields:
                 "verdict": wager.verdict,
                 "now_utc": today,
                 "allowed": matched and today >= wager.resolve_after and today < wager.refund_after,
-                "timeout_refund_allowed": matched and recorded and today >= wager.refund_after,
+                "timeout_refund_allowed": matched and recoverable and today >= wager.refund_after,
             },
             sort_keys=True,
         )

@@ -28,7 +28,7 @@ async function loadSdk() {
 // ============================================================================
 // Constants & Configuration
 // ============================================================================
-const CONTRACT_ADDRESS = "0x49b22b57B0721dc1c42f07120512Dfd74D6F6435";
+const CONTRACT_ADDRESS = "0x19f52F19EADb15A6040e95374e533641662b2b0A";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 export const CHAIN_ID = 61999;
 const CHAIN_ID_HEX = "0xf22f";
@@ -356,6 +356,11 @@ async function refreshFloorCounters() {
   } catch (err) {
     console.error("refreshFloorCounters error:", err);
   }
+}
+
+function formatWriteReadback(wagerId, wager, can) {
+  const reservedStakes = document.getElementById("app-reserved-stakes")?.textContent || "— GEN";
+  return `Contest #${wagerId} readback: ${wager.status} / ${wager.verdict || "(empty)"} / ${wager.funds_disposition || "—"}. Reserved stakes: ${reservedStakes}; allowed: ${can.allowed ? "YES" : "NO"}; timeout_refund_allowed: ${can.timeout_refund_allowed ? "YES" : "NO"}.`;
 }
 
 // ============================================================================
@@ -1036,8 +1041,10 @@ function initOpenForm() {
       if (result && result.txHash) {
         form.reset();
         await refreshFloorCounters();
-        const count = await readWagerCount();
-        showAlert(`Contest opened successfully! ID: #${count}`, "success");
+        showAlert(
+          `Contest opened successfully! ID: #${result.wagerId}. ${formatWriteReadback(result.wagerId, result.wager, result.canResolve)}`,
+          "success"
+        );
       }
     } catch (err) {
       console.error("Error creating wager:", err);
@@ -1145,7 +1152,10 @@ function initMatchForm() {
         const previewBox = document.getElementById("match-preview-container");
         if (previewBox) previewBox.classList.add("is-hidden");
         await refreshFloorCounters();
-        showAlert(`Successfully matched Contest #${wagerId}!`, "success");
+        showAlert(
+          `Successfully matched Contest #${wagerId}! ${formatWriteReadback(wagerId, result.wager, result.canResolve)}`,
+          "success"
+        );
       }
     } catch (err) {
       console.error("Error matching wager:", err);
@@ -1186,7 +1196,10 @@ function initCancelForm() {
       if (result && result.txHash) {
         form.reset();
         await refreshFloorCounters();
-        showAlert(`Contest #${wagerId} has been cancelled and creator stake refunded.`, "success");
+        showAlert(
+          `Contest #${wagerId} has been cancelled and creator stake refunded. ${formatWriteReadback(wagerId, result.wager, result.canResolve)}`,
+          "success"
+        );
       }
     } catch (err) {
       console.error("Error cancelling wager:", err);
@@ -1246,8 +1259,7 @@ function initResolveForm() {
           if (fundsEl) fundsEl.textContent = data.funds_disposition;
 
           if (noteEl) {
-            const reservedStakes = document.getElementById("app-reserved-stakes")?.textContent || "— GEN";
-            const readbackFlags = ` Reserved stakes: ${reservedStakes}; allowed: ${writeResult.canResolve?.allowed ? "YES" : "NO"}; timeout_refund_allowed: ${writeResult.canResolve?.timeout_refund_allowed ? "YES" : "NO"}.`;
+            const readbackFlags = ` ${formatWriteReadback(wagerId, data, writeResult.canResolve)}`;
             if (data.status === "SETTLED") {
               const winner = data.creator_side === data.verdict ? "Creator" : "Joiner";
               noteEl.textContent = `${data.status} / ${data.verdict} / ${data.funds_disposition}. ${winner} wallet received the pot.${readbackFlags}`;
@@ -1297,13 +1309,9 @@ function initTimeoutForm() {
 
       if (result && result.txHash) {
         form.reset();
-        const reservedStakes = document.getElementById("app-reserved-stakes")?.textContent || "— GEN";
         const wager = result.wager;
         const can = result.canResolve;
-        showAlert(
-          `Contest #${wagerId} readback: ${wager.status} / ${wager.verdict} / ${wager.funds_disposition}. Reserved stakes: ${reservedStakes}; allowed: ${can.allowed ? "YES" : "NO"}; timeout_refund_allowed: ${can.timeout_refund_allowed ? "YES" : "NO"}.`,
-          "success"
-        );
+        showAlert(formatWriteReadback(wagerId, wager, can), "success");
       }
     } catch (err) {
       console.error("Error with timeout refund:", err);

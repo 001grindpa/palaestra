@@ -16,22 +16,28 @@ Two counterparties take opposing positions on an unambiguous calendar-dated prop
 - **Chain ID**: `61999` (`0xf22f`)
 - **RPC Endpoint**: `https://studio.genlayer.com/api`
 - **Block Explorer**: `https://explorer-studio.genlayer.com`
-- **Contract Address**: `0x49b22b57B0721dc1c42f07120512Dfd74D6F6435`
+- **Contract Address**: `0x19f52F19EADb15A6040e95374e533641662b2b0A`
+- **Contract Explorer**: https://explorer-studio.genlayer.com/address/0x19f52F19EADb15A6040e95374e533641662b2b0A
 
 ---
 
 ## Live contests
 
-Explorer: https://explorer-studio.genlayer.com/address/0x49b22b57B0721dc1c42f07120512Dfd74D6F6435
+### Contest 1
 
-### Contest 3
+`SETTLED` / `YES` / `PAID_TO_WINNER`.
 
-`SETTLED` / `YES` / `PAID_TO_WINNER`. The pot went to the creator.
+- `create_wager`: `0x6e0d38e26bb6075c7227e295fd7ce8ee8b29beb0902c5629a9fbf39a7e5e12b0`
+- `join`: `0x9d9eaf946bdaad3792a543b2ea2006b076ac9c917fb0b8668333dea775bab843`
+- `resolve`: `0xe79b4ef9ed9907e9bf260e56620da2a7719d451519e4385c86d3e6cb31780c61`
 
-- `create_wager`: `0xea6f2c99cff8593bca15454d043bfb99f19f72708cfda334f1def4f1f16eb03e`
-- `join`: `0x9344ab61e9bd2c5b6e51ba33a43efb4718849665493641d35aac52ef8d1ed4df`
-- `resolve`: `0x5b51272e432549804b0b0ab6331423043c8a147bf0bbfc36b42e4004d5771183`
-- `winner transfer`: `0xeb8bcb703bcf9bbe9b3bf0c398c7d95efc59efcff6772bead429ef9faa52a222`
+### Contest 2
+
+Expired recovery.
+
+- `create_wager`: `0xf0e0180ab39f1d3fd35fb42706708bd9663e7319bea11594e594ec7c80f1d378`
+- `join`: `0xd8dbb27785e460291c9c9b31d34a1dcec2e01ee899934d3a9a2fef0be1bdaf13`
+- `timeout_refund`: `0x7f586db85ea9f2e6311702e51239af3879b75da68c41c3e21bca2b831f5077e1`
 
 ---
 
@@ -75,8 +81,8 @@ Palaestra operates through five state-modifying actions and four view methods.
 ### 5. `timeout_refund(wager_id)`
 - **Parameters**:
   - `wager_id`: Contest ID of a `MATCHED` contest.
-- **Availability**: Callable on or after `refund_after` (one UTC day after `resolve_after`), provided the contest remains `MATCHED` and `resolve` has recorded `UNKNOWN` or `DISAGREE`. A matched contest with an empty verdict cannot be returned.
-- **State Transition**: Changes status to `REFUNDED`, records verdict `TIMEOUT`, sets funds disposition to `REFUNDED_TO_BOTH`, and returns both individual stakes to creator and joiner wallets.
+- **Availability**: Callable on or after `refund_after` (the UTC day after `resolve_after`) while the contest remains `MATCHED`. This recovers a contest with an empty verdict or one left unresolved after `UNKNOWN` or `DISAGREE`; `resolve` is closed by then.
+- **State Transition**: Changes status to `REFUNDED` and sets funds disposition to `REFUNDED_TO_BOTH`, returning both individual stakes to the creator and joiner wallets. An empty verdict is recorded as `EXPIRED`; an inconclusive contest is recorded as `TIMEOUT`. Neither return selects a winner.
 
 After a contest reaches `SETTLED` or `REFUNDED`, both actions are closed; a second call reverts.
 
@@ -118,7 +124,9 @@ To maintain integrity and independence, both sources must use `https://` and bel
 5. **Resolve & Settle**:
    - On or after the `resolve_after` date, navigate to **Resolve** and trigger **Settle**.
    - If unanimous consensus is reached, the winner receives the pot.
-   - If inconclusive, both parties may use **Return both stakes** after `refund_after` opens.
+   - Resolve is open from `resolve_after` through the day before `refund_after`. `YES` or `NO` settles the contest as `SETTLED` / `PAID_TO_WINNER`: the creator wins when `creator_side` matches the verdict; otherwise, the joiner wins.
+   - `UNKNOWN` or `DISAGREE` stays `MATCHED`. On `refund_after`, **Return both stakes** returns both stakes as `REFUNDED` / `TIMEOUT`; a matched contest with an empty verdict can also be recovered as `REFUNDED` / `EXPIRED`. Both use `REFUNDED_TO_BOTH` and do not choose a winner.
+   - After `SETTLED` or `REFUNDED`, both actions are closed; a second call reverts.
 
 6. **Lookup & Inspect**:
    - Navigate to **Lookup** to query any on-chain contest record and view real-time settlement status.
